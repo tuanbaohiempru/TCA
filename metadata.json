@@ -1,0 +1,7 @@
+{
+  "name": "TCAssistant",
+  "description": "Đội ngũ trợ lý TC",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

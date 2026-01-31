@@ -1,6 +1,7 @@
-
 import { httpsCallable, Functions } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
+// NOTE: We use '@google/genai' (New SDK) for Gemini 1.5/2.0 features.
+// Do not downgrade to '@google/generative-ai'.
 import { GoogleGenAI } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus } from "../types";
 import { HTVK_BENEFITS } from "../data/pruHanhTrangVuiKhoe";
@@ -16,7 +17,6 @@ const getApiKey = (): string => {
 const apiKey = getApiKey();
 // Client-side instance is ONLY created if user manually injected key in localStorage
 const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
-let isServerAvailable = isFirebaseReady;
 
 const DEFAULT_MODEL = 'gemini-3-pro-preview'; 
 const FLASH_MODEL = 'gemini-3-flash-preview'; 
@@ -43,7 +43,8 @@ QUY TẮC TRẢ LỜI:
  */
 const callAI = async (payload: any): Promise<any> => {
     // 1. Priority: Server-side (Secure Gateway)
-    if (isServerAvailable && functions) {
+    // Always check the live value of isFirebaseReady
+    if (isFirebaseReady && functions) {
         try {
             const gateway = httpsCallable(functions as Functions, 'geminiGateway', { timeout: 300000 });
             const result: any = await gateway(payload);
@@ -198,14 +199,22 @@ export const chatWithData = async (
         ];
     }
 
+    // FIX: Clean history to ensure it starts with 'user' role
+    // Filter out initial 'model' messages (like welcome messages)
+    const validHistory = history.filter((msg, index) => {
+        // If it's the very first message in history and it's from 'model', skip it
+        if (index === 0 && msg.role === 'model') return false;
+        return true;
+    }).map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+    }));
+
     const payload = {
         endpoint: 'chat',
         model: DEFAULT_MODEL,
         message: messageContent,
-        history: history.map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.text }]
-        })),
+        history: validHistory, // Use cleaned history
         systemInstruction: SUSAM_SYSTEM_INSTRUCTION + `\n\n${fullContext}`,
         config: {
             temperature: 0.2,

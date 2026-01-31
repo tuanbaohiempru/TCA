@@ -81,6 +81,7 @@ const App: React.FC = () => {
 
     const isDemo = !isFirebaseReady;
 
+    // --- CRUD FUNCTIONS ---
     const addAppointment = async (a: Appointment) => { 
         if(isDemo) { setState(prev => ({...prev, appointments: [...prev.appointments, a]})); return; } 
         await addData(COLLECTIONS.APPOINTMENTS, a); 
@@ -96,33 +97,17 @@ const App: React.FC = () => {
         await addData(COLLECTIONS.CUSTOMERS, c); 
     };
 
-    // --- ENHANCED UPDATE CUSTOMER WITH AUTOMATION ---
     const updateCustomer = async (newCustomer: Customer) => {
         const oldCustomer = state.customers.find(c => c.id === newCustomer.id);
-        
-        // 1. Chạy bộ máy tự động hóa để tìm các thay đổi cần xử lý
-        const { appointmentsToUpdate, appointmentsToAdd, newTimelineItems } = runCustomerAutomations(
-            oldCustomer, 
-            newCustomer, 
-            state.appointments
-        );
-
-        // 2. Cập nhật Customer (bao gồm cả timeline mới nếu có)
-        const customerToSave = {
-            ...newCustomer,
-            timeline: [...newTimelineItems, ...(newCustomer.timeline || [])]
-        };
+        const { appointmentsToUpdate, appointmentsToAdd, newTimelineItems } = runCustomerAutomations(oldCustomer, newCustomer, state.appointments);
+        const customerToSave = { ...newCustomer, timeline: [...newTimelineItems, ...(newCustomer.timeline || [])] };
 
         if (isDemo) {
-            setState(prev => ({
-                ...prev,
-                customers: prev.customers.map(item => item.id === newCustomer.id ? customerToSave : item)
-            }));
+            setState(prev => ({ ...prev, customers: prev.customers.map(item => item.id === newCustomer.id ? customerToSave : item) }));
         } else {
             await updateData(COLLECTIONS.CUSTOMERS, newCustomer.id, customerToSave);
         }
 
-        // 3. Thực thi các thay đổi lịch hẹn tự động
         for (const app of appointmentsToAdd) await addAppointment(app);
         for (const app of appointmentsToUpdate) await updateAppointment(app);
     };
@@ -132,6 +117,11 @@ const App: React.FC = () => {
     const updateContract = async (c: Contract) => { if(isDemo) { setState(prev => ({...prev, contracts: prev.contracts.map(item => item.id === c.id ? c : item)})); return; } await updateData(COLLECTIONS.CONTRACTS, c.id, c); };
     const deleteAppointment = async (id: string) => { if(isDemo) { setState(prev => ({...prev, appointments: prev.appointments.filter(item => item.id !== id)})); return; } await deleteData(COLLECTIONS.APPOINTMENTS, id); };
     const saveIllustration = async (ill: Illustration) => { if(isDemo) { setState(prev => ({...prev, illustrations: [ill, ...prev.illustrations]})); return; } await addData(COLLECTIONS.ILLUSTRATIONS, ill); };
+
+    // Product CRUD (Lifted for Settings Page)
+    const addProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: [...prev.products, p]})); return; } await addData(COLLECTIONS.PRODUCTS, p); };
+    const updateProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.map(x => x.id === p.id ? p : x)})); return; } await updateData(COLLECTIONS.PRODUCTS, p.id, p); };
+    const deleteProduct = async (id: string) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.filter(x => x.id !== id)})); return; } await deleteData(COLLECTIONS.PRODUCTS, id); };
 
     if (authLoading) return <div className="h-screen w-screen flex items-center justify-center bg-gray-50"><div className="w-12 h-12 border-4 border-pru-red border-t-transparent rounded-full animate-spin"></div></div>;
 
@@ -186,7 +176,17 @@ const App: React.FC = () => {
                         } />
                         <Route path="/settings" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <SettingsPage profile={state.agentProfile} onSave={(p) => isDemo ? setState(prev => ({...prev, agentProfile: p})) : updateData(COLLECTIONS.SETTINGS, state.agentProfile?.id || '', p)} isDarkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} />
+                                <SettingsPage 
+                                    profile={state.agentProfile} 
+                                    onSave={(p) => isDemo ? setState(prev => ({...prev, agentProfile: p})) : updateData(COLLECTIONS.SETTINGS, state.agentProfile?.id || '', p)} 
+                                    isDarkMode={isDarkMode} 
+                                    toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+                                    // Pass Product Props to Settings
+                                    products={state.products}
+                                    onAddProduct={addProduct}
+                                    onUpdateProduct={updateProduct}
+                                    onDeleteProduct={deleteProduct}
+                                />
                                 <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
                             </Layout>
                         } />

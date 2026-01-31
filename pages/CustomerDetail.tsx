@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Contract, InteractionType, TimelineItem, ClaimRecord, ClaimStatus, CustomerDocument, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, PersonalityType, RelationshipType, ContractStatus, IssuanceType, FinancialStatus, ReadinessLevel, FinancialPriority, CustomerStatus, AssetType, LiabilityType, FinancialAsset, FinancialLiability } from '../types';
 import { formatDateVN, CurrencyInput, SearchableCustomerSelect } from '../components/Shared';
 import { uploadFile } from '../services/storage';
 import { analyzeSocialInput, chatWithData } from '../services/geminiService';
+import FamilyTree from '../components/FamilyTree';
 
 interface CustomerDetailProps {
     customers: Customer[];
@@ -19,7 +21,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     const customer = customers.find(c => c.id === id);
     const customerContracts = contracts.filter(c => c.customerId === id);
 
-    const [activeTab, setActiveTab] = useState<'analysis' | 'timeline' | 'contracts' | 'claims' | 'docs' | 'info' | 'finance'>('analysis');
+    const [activeTab, setActiveTab] = useState<'analysis' | 'timeline' | 'contracts' | 'claims' | 'docs' | 'info' | 'finance' | 'family'>('analysis');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isRelationModalOpen, setIsRelationModalOpen] = useState(false);
     const [isMagicScanning, setIsMagicScanning] = useState(false);
@@ -28,7 +30,6 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     const [newInteraction, setNewInteraction] = useState<{type: InteractionType, content: string, title: string, date: string}>({
         type: InteractionType.NOTE, content: '', title: '', date: new Date().toISOString().split('T')[0]
     });
-    const [timelineDeleteId, setTimelineDeleteId] = useState<string | null>(null);
 
     // New Claim State
     const [isAddingClaim, setIsAddingClaim] = useState(false);
@@ -89,6 +90,31 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
         setIsAddingClaim(false);
     };
 
+    // --- FINANCE HANDLERS ---
+    const handleAddAsset = async () => {
+        if (!newAsset.name || !newAsset.value) return alert("Nhập tên và giá trị tài sản");
+        const item: FinancialAsset = { id: Date.now().toString(), type: newAsset.type || AssetType.OTHER, name: newAsset.name, value: newAsset.value };
+        await onUpdateCustomer({ ...customer, assets: [...(customer.assets || []), item] });
+        setNewAsset({ type: AssetType.CASH, name: '', value: 0 });
+    };
+
+    const handleDeleteAsset = async (assetId: string) => {
+        const updated = customer.assets?.filter(a => a.id !== assetId) || [];
+        await onUpdateCustomer({ ...customer, assets: updated });
+    };
+
+    const handleAddLiability = async () => {
+        if (!newLiability.name || !newLiability.amount) return alert("Nhập tên và số tiền nợ");
+        const item: FinancialLiability = { id: Date.now().toString(), type: newLiability.type || LiabilityType.PERSONAL_LOAN, name: newLiability.name, amount: newLiability.amount };
+        await onUpdateCustomer({ ...customer, liabilities: [...(customer.liabilities || []), item] });
+        setNewLiability({ type: LiabilityType.MORTGAGE, name: '', amount: 0 });
+    };
+
+    const handleDeleteLiability = async (liabId: string) => {
+        const updated = customer.liabilities?.filter(l => l.id !== liabId) || [];
+        await onUpdateCustomer({ ...customer, liabilities: updated });
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: any) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -137,7 +163,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                     <button onClick={handleMagicScan} disabled={isMagicScanning} className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30">
                         {isMagicScanning ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-magic"></i>} Magic Scan
                     </button>
-                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 md:flex-none bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl font-bold text-sm">Sửa hồ sơ</button>
+                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 md:flex-none bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-700">Sửa hồ sơ</button>
                 </div>
             </div>
 
@@ -146,6 +172,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                 {[
                     {id: 'analysis', label: 'Tài chính', icon: 'fa-chart-pie'},
                     {id: 'finance', label: 'Tài sản & Nợ', icon: 'fa-coins'},
+                    {id: 'family', label: 'Gia phả', icon: 'fa-sitemap'},
                     {id: 'timeline', label: 'Dòng thời gian', icon: 'fa-history'},
                     {id: 'contracts', label: 'Hợp đồng', icon: 'fa-file-contract'},
                     {id: 'claims', label: 'Bồi thường', icon: 'fa-heartbeat'},
@@ -169,12 +196,96 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                                     <div className="flex justify-between text-xs font-bold mb-1"><span className="text-gray-500">Đã có: {gapAnalysis.currentProtection.toLocaleString()} đ</span><span className="text-gray-800 dark:text-gray-200">Mục tiêu: {gapAnalysis.targetProtection.toLocaleString()} đ</span></div>
                                     <div className="h-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden"><div className={`h-full rounded-full ${gapAnalysis.protectionProgress < 80 ? 'bg-orange-500' : 'bg-green-500'}`} style={{width: `${gapAnalysis.protectionProgress}%`}}></div></div>
                                 </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold">Tổng tài sản</p>
+                                        <p className="text-lg font-black text-green-600">{gapAnalysis.totalAssets.toLocaleString()} đ</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold">Tổng nợ</p>
+                                        <p className="text-lg font-black text-red-600">{gapAnalysis.totalLiabilities.toLocaleString()} đ</p>
+                                    </div>
+                                </div>
                                 {gapAnalysis.gapProtection > 0 && (
                                     <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/30 flex justify-between items-center">
                                         <div><p className="text-[10px] font-bold text-red-600 uppercase">Thiếu hụt (Gap)</p><p className="text-xl font-black text-red-700 dark:text-red-400">{gapAnalysis.gapProtection.toLocaleString()} đ</p></div>
                                         <button onClick={() => navigate('/product-advisory', { state: { customerId: customer.id, suggestedSA: gapAnalysis.gapProtection } })} className="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md">Thiết kế ngay</button>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'family' && (
+                        <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-sitemap text-pru-red"></i> Sơ đồ Gia phả</h3>
+                                <button onClick={() => setIsRelationModalOpen(true)} className="text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 px-3 py-2 rounded-lg font-bold transition"><i className="fas fa-plus mr-1"></i> Thêm người thân</button>
+                            </div>
+                            <FamilyTree centerCustomer={customer} allCustomers={customers} contracts={contracts} />
+                            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                                <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Gợi ý Cross-sell từ Gia phả:</h4>
+                                <ul className="text-xs text-blue-700 dark:text-blue-200 space-y-1 list-disc ml-4">
+                                    <li>Kiểm tra xem <strong>Vợ/Chồng</strong> đã có thẻ sức khỏe chưa?</li>
+                                    <li>Các <strong>Con</strong> đã có quỹ học vấn chưa?</li>
+                                    <li><strong>Bố mẹ</strong> có cần bảo hiểm hưu trí hoặc bệnh hiểm nghèo không?</li>
+                                </ul>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'finance' && (
+                        <div className="space-y-6">
+                            {/* ASSETS */}
+                            <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-green-600 text-sm uppercase mb-4 flex items-center"><i className="fas fa-wallet mr-2"></i> Tài sản</h3>
+                                <div className="space-y-2 mb-4">
+                                    {customer.assets?.map(a => (
+                                        <div key={a.id} className="flex justify-between items-center p-3 bg-green-50/50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/20 group">
+                                            <div>
+                                                <p className="font-bold text-gray-800 dark:text-gray-100 text-sm">{a.name}</p>
+                                                <p className="text-[10px] text-gray-500">{a.type}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-black text-green-700 dark:text-green-400">{a.value.toLocaleString()} đ</span>
+                                                <button onClick={() => handleDeleteAsset(a.id)} className="text-red-400 opacity-0 group-hover:opacity-100 transition"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!customer.assets || customer.assets.length === 0) && <p className="text-sm text-gray-400 italic text-center py-2">Chưa có tài sản</p>}
+                                </div>
+                                <div className="grid grid-cols-12 gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div className="col-span-3"><select className="input-field text-xs py-2" value={newAsset.type} onChange={(e: any) => setNewAsset({...newAsset, type: e.target.value})}>{Object.values(AssetType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                    <div className="col-span-4"><input className="input-field text-xs py-2" placeholder="Tên tài sản" value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} /></div>
+                                    <div className="col-span-3"><CurrencyInput className="input-field text-xs py-2" placeholder="Giá trị" value={newAsset.value || 0} onChange={v => setNewAsset({...newAsset, value: v})} /></div>
+                                    <div className="col-span-2"><button onClick={handleAddAsset} className="w-full h-full bg-green-600 text-white rounded-lg font-bold text-xs">Thêm</button></div>
+                                </div>
+                            </div>
+
+                            {/* LIABILITIES */}
+                            <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-red-600 text-sm uppercase mb-4 flex items-center"><i className="fas fa-hand-holding-usd mr-2"></i> Khoản nợ</h3>
+                                <div className="space-y-2 mb-4">
+                                    {customer.liabilities?.map(l => (
+                                        <div key={l.id} className="flex justify-between items-center p-3 bg-red-50/50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/20 group">
+                                            <div>
+                                                <p className="font-bold text-gray-800 dark:text-gray-100 text-sm">{l.name}</p>
+                                                <p className="text-[10px] text-gray-500">{l.type}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-black text-red-700 dark:text-red-400">{l.amount.toLocaleString()} đ</span>
+                                                <button onClick={() => handleDeleteLiability(l.id)} className="text-red-400 opacity-0 group-hover:opacity-100 transition"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!customer.liabilities || customer.liabilities.length === 0) && <p className="text-sm text-gray-400 italic text-center py-2">Chưa có khoản nợ</p>}
+                                </div>
+                                <div className="grid grid-cols-12 gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div className="col-span-3"><select className="input-field text-xs py-2" value={newLiability.type} onChange={(e: any) => setNewLiability({...newLiability, type: e.target.value})}>{Object.values(LiabilityType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                    <div className="col-span-4"><input className="input-field text-xs py-2" placeholder="Tên khoản nợ" value={newLiability.name} onChange={e => setNewLiability({...newLiability, name: e.target.value})} /></div>
+                                    <div className="col-span-3"><CurrencyInput className="input-field text-xs py-2" placeholder="Số tiền" value={newLiability.amount || 0} onChange={v => setNewLiability({...newLiability, amount: v})} /></div>
+                                    <div className="col-span-2"><button onClick={handleAddLiability} className="w-full h-full bg-red-600 text-white rounded-lg font-bold text-xs">Thêm</button></div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -323,15 +434,93 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     );
 };
 
-// Sub-components (Re-included to ensure they exist in this file context)
+// Sub-components (unchanged, but required for context)
 const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[]; onSave: (updated: Customer) => Promise<void>; onClose: () => void;}> = ({ customer, onSave, onClose }) => {
     const [formData, setFormData] = useState<Customer>({ ...customer });
+    const [tab, setTab] = useState<'general' | 'health' | 'analysis'>('general');
+
+    const handleHealthChange = (key: string, value: any) => {
+        setFormData({ ...formData, health: { ...formData.health, [key]: value } });
+    };
+
+    const handleAnalysisChange = (key: string, value: any) => {
+        setFormData({ ...formData, analysis: { ...formData.analysis, [key]: value } });
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in backdrop-blur-sm">
             <div className="bg-white dark:bg-pru-card rounded-xl max-w-4xl w-full h-[90vh] flex flex-col shadow-2xl transition-colors">
-                <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 rounded-t-xl"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Sửa hồ sơ khách hàng</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fas fa-times text-xl"></i></button></div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="label-text">Họ và tên</label><input className="input-field" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} /></div><div><label className="label-text">Số điện thoại</label><input className="input-field" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></div><div><label className="label-text">Ngày sinh</label><input type="date" className="input-field" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} /></div><div><label className="label-text">Giới tính</label><select className="input-field" value={formData.gender} onChange={(e: any) => setFormData({ ...formData, gender: e.target.value })}>{Object.values(Gender).map(v => <option key={v} value={v}>{v}</option>)}</select></div><div><label className="label-text">Nghề nghiệp</label><input className="input-field" value={formData.occupation} onChange={e => setFormData({ ...formData, occupation: e.target.value })} /></div><div><label className="label-text">CCCD</label><input className="input-field" value={formData.idCard} onChange={e => setFormData({ ...formData, idCard: e.target.value })} /></div><div className="md:col-span-2"><label className="label-text">Địa chỉ</label><input className="input-field" value={formData.companyAddress} onChange={e => setFormData({ ...formData, companyAddress: e.target.value })} /></div></div></div>
-                <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-3 rounded-b-xl"><button onClick={onClose} className="px-5 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Hủy</button><button onClick={() => onSave(formData)} className="px-5 py-2 bg-pru-red text-white font-bold rounded-lg hover:bg-red-700 shadow-md">Lưu thay đổi</button></div>
+                <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 rounded-t-xl">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Sửa hồ sơ: {formData.fullName}</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fas fa-times text-xl"></i></button>
+                </div>
+                
+                {/* TABS IN MODAL */}
+                <div className="flex border-b border-gray-200 dark:border-gray-700 px-4">
+                    <button onClick={() => setTab('general')} className={`py-3 px-4 text-sm font-bold border-b-2 transition ${tab === 'general' ? 'border-pru-red text-pru-red' : 'border-transparent text-gray-500'}`}>Thông tin chung</button>
+                    <button onClick={() => setTab('health')} className={`py-3 px-4 text-sm font-bold border-b-2 transition ${tab === 'health' ? 'border-pru-red text-pru-red' : 'border-transparent text-gray-500'}`}>Sức khỏe</button>
+                    <button onClick={() => setTab('analysis')} className={`py-3 px-4 text-sm font-bold border-b-2 transition ${tab === 'analysis' ? 'border-pru-red text-pru-red' : 'border-transparent text-gray-500'}`}>Phân tích</button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {tab === 'general' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label className="label-text">Họ và tên</label><input className="input-field" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} /></div>
+                            <div><label className="label-text">Số điện thoại</label><input className="input-field" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></div>
+                            <div><label className="label-text">Ngày sinh</label><input type="date" className="input-field" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} /></div>
+                            <div><label className="label-text">Giới tính</label><select className="input-field" value={formData.gender} onChange={(e: any) => setFormData({ ...formData, gender: e.target.value })}>{Object.values(Gender).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+                            <div><label className="label-text">Nghề nghiệp</label><input className="input-field" value={formData.occupation} onChange={e => setFormData({ ...formData, occupation: e.target.value })} /></div>
+                            <div><label className="label-text">CCCD</label><input className="input-field" value={formData.idCard} onChange={e => setFormData({ ...formData, idCard: e.target.value })} /></div>
+                            <div>
+                                <label className="label-text">Tình trạng hôn nhân</label>
+                                <select className="input-field" value={formData.maritalStatus} onChange={(e: any) => setFormData({ ...formData, maritalStatus: e.target.value })}>{Object.values(MaritalStatus).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                            </div>
+                            <div>
+                                <label className="label-text">Vai trò tài chính</label>
+                                <select className="input-field" value={formData.financialRole} onChange={(e: any) => setFormData({ ...formData, financialRole: e.target.value })}>{Object.values(FinancialRole).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                            </div>
+                            <div>
+                                <label className="label-text">Số người phụ thuộc</label>
+                                <input type="number" className="input-field" value={formData.dependents} onChange={e => setFormData({ ...formData, dependents: Number(e.target.value) })} />
+                            </div>
+                            <div className="md:col-span-2"><label className="label-text">Địa chỉ</label><input className="input-field" value={formData.companyAddress} onChange={e => setFormData({ ...formData, companyAddress: e.target.value })} /></div>
+                        </div>
+                    )}
+
+                    {tab === 'health' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="label-text">Chiều cao (cm)</label><input type="number" className="input-field" value={formData.health.height} onChange={e => handleHealthChange('height', Number(e.target.value))} /></div>
+                                <div><label className="label-text">Cân nặng (kg)</label><input type="number" className="input-field" value={formData.health.weight} onChange={e => handleHealthChange('weight', Number(e.target.value))} /></div>
+                            </div>
+                            <div><label className="label-text">Thói quen (Hút thuốc/Rượu bia)</label><input className="input-field" value={formData.health.habits} onChange={e => handleHealthChange('habits', e.target.value)} /></div>
+                            <div>
+                                <label className="label-text">Tiền sử bệnh án</label>
+                                <textarea className="input-field" rows={4} value={formData.health.medicalHistory} onChange={e => handleHealthChange('medicalHistory', e.target.value)} placeholder="Chi tiết bệnh, năm mắc, điều trị..." />
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'analysis' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label className="label-text">Thu nhập hàng tháng (VNĐ)</label><CurrencyInput className="input-field" value={formData.analysis.incomeMonthly} onChange={v => handleAnalysisChange('incomeMonthly', v)} /></div>
+                                <div><label className="label-text">Xu hướng thu nhập</label><select className="input-field" value={formData.analysis.incomeTrend} onChange={(e: any) => handleAnalysisChange('incomeTrend', e.target.value)}>{Object.values(IncomeTrend).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+                                <div><label className="label-text">Chi tiêu hàng tháng (VNĐ)</label><CurrencyInput className="input-field" value={formData.analysis.monthlyExpenses} onChange={v => handleAnalysisChange('monthlyExpenses', v)} /></div>
+                                <div><label className="label-text">Mức độ chấp nhận rủi ro</label><select className="input-field" value={formData.analysis.riskTolerance} onChange={(e: any) => handleAnalysisChange('riskTolerance', e.target.value)}>{Object.values(RiskTolerance).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+                                <div><label className="label-text">Kiểu tính cách (DISC/MBTI)</label><select className="input-field" value={formData.analysis.personality} onChange={(e: any) => handleAnalysisChange('personality', e.target.value)}>{Object.values(PersonalityType).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+                                <div><label className="label-text">Mức độ sẵn sàng</label><select className="input-field" value={formData.analysis.readiness} onChange={(e: any) => handleAnalysisChange('readiness', e.target.value)}>{Object.values(ReadinessLevel).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
+                            </div>
+                            <div><label className="label-text">Mối lo lớn nhất</label><input className="input-field" value={formData.analysis.biggestWorry} onChange={e => handleAnalysisChange('biggestWorry', e.target.value)} /></div>
+                            <div><label className="label-text">Kế hoạch tương lai</label><input className="input-field" value={formData.analysis.futurePlans} onChange={e => handleAnalysisChange('futurePlans', e.target.value)} /></div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-3 rounded-b-xl">
+                    <button onClick={onClose} className="px-5 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Hủy</button>
+                    <button onClick={() => onSave(formData)} className="px-5 py-2 bg-pru-red text-white font-bold rounded-lg hover:bg-red-700 shadow-md">Lưu thay đổi</button>
+                </div>
             </div>
         </div>
     );

@@ -1,7 +1,6 @@
 import { httpsCallable, Functions } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
 // NOTE: We use '@google/genai' (New SDK) for Gemini 1.5/2.0 features.
-// Do not downgrade to '@google/generative-ai'.
 import { GoogleGenAI } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus } from "../types";
 import { HTVK_BENEFITS } from "../data/pruHanhTrangVuiKhoe";
@@ -9,13 +8,12 @@ import { searchCustomersByName, getContractsByCustomerId } from "./db";
 
 // --- CONFIGURATION ---
 const getApiKey = (): string => {
-    // SECURITY UPDATE: Only allow manual local override for development debugging.
-    // Never read from process.env in production build.
     return localStorage.getItem('gemini_api_key') || '';
 };
 
 const apiKey = getApiKey();
 // Client-side instance is ONLY created if user manually injected key in localStorage
+// FIX: Constructor must use object with named parameter `apiKey`
 const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const DEFAULT_MODEL = 'gemini-3-pro-preview'; 
@@ -43,7 +41,7 @@ QUY TẮC TRẢ LỜI:
  */
 const callAI = async (payload: any): Promise<any> => {
     // 1. Priority: Server-side (Secure Gateway)
-    // Always check the live value of isFirebaseReady
+    // Check live readiness here
     if (isFirebaseReady && functions) {
         try {
             const gateway = httpsCallable(functions as Functions, 'geminiGateway', { timeout: 300000 });
@@ -67,11 +65,21 @@ const callAI = async (payload: any): Promise<any> => {
         const finalConfig = { ...config, systemInstruction, tools };
 
         if (endpoint === 'chat') {
-            const chat = clientAI.chats.create({ model: modelId, config: finalConfig, history: history || [] });
+            // FIX: New SDK Syntax for Chat
+            const chat = clientAI.chats.create({ 
+                model: modelId, 
+                config: finalConfig, 
+                history: history || [] 
+            });
             const result = await chat.sendMessage({ message: message || " " });
             return { text: result.text, functionCalls: result.functionCalls };
         } else {
-            const result = await clientAI.models.generateContent({ model: modelId, contents: contents, config: finalConfig });
+            // FIX: New SDK Syntax for Generate Content
+            const result = await clientAI.models.generateContent({ 
+                model: modelId, 
+                contents: contents, 
+                config: finalConfig 
+            });
             return { text: result.text, functionCalls: result.functionCalls };
         }
     } catch (e: any) {
@@ -82,7 +90,6 @@ const callAI = async (payload: any): Promise<any> => {
 
 /**
  * Helper: Extract Search Intent
- * Updated to use callAI wrapper (Secure)
  */
 const detectSearchIntent = async (query: string): Promise<{ needsSearch: boolean; customerName?: string }> => {
     try {
@@ -94,7 +101,7 @@ const detectSearchIntent = async (query: string): Promise<{ needsSearch: boolean
         Example: "Viết bài về ung thư" -> {"needsSearch": false, "customerName": null}
         `;
         
-        // Use callAI to route through Gateway if needed
+        // Use callAI wrapper
         const res = await callAI({
             endpoint: 'generateContent',
             model: FLASH_MODEL,
@@ -129,7 +136,6 @@ export const chatWithData = async (
             console.log(`[RAG] Searching for: ${intent.customerName}`);
             
             // 2. RAG: RETRIEVAL (Server-side Search)
-            // Use DB functions provided in db.ts
             const matchedCustomers = await searchCustomersByName(intent.customerName);
             
             if (matchedCustomers.length === 0) {
@@ -241,9 +247,8 @@ export const chatWithData = async (
     return { text: rawText };
 };
 
-// ... KEEP EXISTING EXPORTS AS STUBS OR WRAPPERS ...
+// ... KEEP EXISTING EXPORTS AS WRAPPERS ...
 export const generateActionScript = async (task: any, customer: Customer | null): Promise<any> => {
-    // Wrapper Example
     const prompt = `Soạn kịch bản ${task.category} cho khách hàng ${customer?.fullName}. Lý do: ${task.why}`;
     const res = await callAI({
         endpoint: 'generateContent',
@@ -254,11 +259,10 @@ export const generateActionScript = async (task: any, customer: Customer | null)
     try { return JSON.parse(res.text || '{}'); } catch { return null; }
 };
 
-// Ensure extractPdfText uses the Gateway as well
 export const extractPdfText = async (url: string) => {
     try {
         const res = await callAI({
-            endpoint: 'extractText', // Server supports this
+            endpoint: 'extractText',
             url: url
         });
         return res.text;
@@ -269,8 +273,21 @@ export const extractPdfText = async (url: string) => {
 };
 
 export const extractIdentityCard = async (base64Image: string) => { 
-    // Logic extraction remains same, handled via chatWithData or specific prompt
-    return null; 
+    try {
+        const prompt = `Trích xuất thông tin từ ảnh CMND/CCCD này. Trả về JSON: { "fullName": "", "idCard": "", "dob": "YYYY-MM-DD", "gender": "Nam/Nữ", "companyAddress": "" }`;
+        const res = await callAI({
+            endpoint: 'generateContent',
+            model: FLASH_MODEL,
+            contents: [
+                { text: prompt },
+                { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+            ],
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(res.text || '{}');
+    } catch (e) {
+        return null; 
+    }
 };
 
 export const processVoiceCommand = async (t: string, c: Customer[]) => null;

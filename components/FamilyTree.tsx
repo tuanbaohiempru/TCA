@@ -1,19 +1,23 @@
 
 import React, { useMemo, useCallback } from 'react';
-// Combine imports and use inline 'type' for interfaces
-import ReactFlow, {
+// 1. Sử dụng Named Export cho ReactFlow để tương thích tốt hơn
+// 2. Tách biệt hoàn toàn import type
+import {
+  ReactFlow,
   Background,
   Controls,
   Position,
   useNodesState,
   useEdgesState,
   MarkerType,
-  Handle,
-  type Edge,
-  type Node
+  Handle
 } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
+
 import 'reactflow/dist/style.css';
-import dagre from 'dagre';
+// 3. Fix import dagre: Dagre là thư viện cũ (CommonJS), cần import * as
+import * as dagre from 'dagre';
+
 import { Customer, RelationshipType, CustomerStatus, Contract, ContractStatus } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -150,8 +154,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({ centerCustomer, allCustomers, c
             const relative = allCustomers.find(c => c.id === rel.relatedCustomerId);
             if (!relative || processedIds.has(relative.id)) return;
 
-            // Determine Direction based on Relationship
-            // Parents -> Center -> Children
             let source = '';
             let target = '';
             let role = rel.relationship;
@@ -166,8 +168,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({ centerCustomer, allCustomers, c
                 source = centerCustomer.id;
                 target = relative.id;
             }
-            // If SPOUSE or SIBLING -> Treat as "Same Rank" but using Dagre we link them for grouping
-            // Usually simpler to link Center -> Relative for visualizing "My Family"
+            // Other relationships
             else {
                 source = centerCustomer.id;
                 target = relative.id;

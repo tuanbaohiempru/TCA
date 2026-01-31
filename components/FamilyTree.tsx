@@ -1,6 +1,7 @@
 
 import React, { useMemo, useCallback } from 'react';
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   Edge,

@@ -54,7 +54,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     }
   }, [isOpen, messages]);
 
-  // --- Reset Context Logic ---
+  // --- Reset Context Logic (Session Control) ---
   const handleResetChat = () => {
       if (window.confirm("Bắt đầu đoạn chat mới? (Lịch sử cũ sẽ bị xóa)")) {
           setMessages([DEFAULT_WELCOME]);
@@ -244,7 +244,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
 
   const handleSelection = (candidate: any) => {
       // Send a hidden message to AI indicating selection
-      // This helps AI context know who was picked
+      // This helps AI context know who was picked so it can proceed
       const selectionText = `Tôi chọn: ${candidate.name} (ID: ${candidate.id}). Hãy tiếp tục thực hiện yêu cầu cho khách hàng này.`;
       handleSend(selectionText);
   };
@@ -273,7 +273,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
             </div>
             <div className="flex gap-1 items-center">
                  {/* RESET BUTTON */}
-                 <button onClick={handleResetChat} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded text-white/80 hover:text-white" title="Đoạn chat mới">
+                 <button onClick={handleResetChat} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded text-white/80 hover:text-white transition" title="Đoạn chat mới">
                     <i className="fas fa-eraser"></i>
                  </button>
                  <button onClick={() => setIsExpanded(!isExpanded)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded"><i className={`fas ${isExpanded ? 'fa-compress-alt' : 'fa-expand-alt'}`}></i></button>
@@ -300,19 +300,19 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
 
                 {/* RENDER SELECTION CARDS IF ACTION IS SELECT_CUSTOMER */}
                 {msg.actionData && msg.actionData.action === 'SELECT_CUSTOMER' && (
-                    <div className="ml-10 mt-2 grid grid-cols-1 gap-2 w-[85%]">
+                    <div className="ml-10 mt-2 grid grid-cols-1 gap-2 w-[85%] animate-fade-in">
                         {msg.actionData.data.candidates.map((c: any, cIdx: number) => (
                             <button 
-                                key={c.id} 
+                                key={c.id || cIdx} 
                                 onClick={() => handleSelection(c)}
                                 className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm hover:border-red-300 hover:bg-red-50 transition text-left flex items-center gap-3 group"
                             >
-                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 group-hover:text-red-500">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 group-hover:text-red-500 group-hover:bg-white transition-colors">
                                     {c.name.charAt(0)}
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-bold text-sm text-gray-800">{c.name}</p>
-                                    <p className="text-xs text-gray-500">{c.info}</p>
+                                <div className="flex-1 overflow-hidden">
+                                    <p className="font-bold text-sm text-gray-800 truncate group-hover:text-red-600">{c.name}</p>
+                                    <p className="text-xs text-gray-500 truncate">{c.info}</p>
                                 </div>
                                 <i className="fas fa-chevron-right text-gray-300 group-hover:text-red-500"></i>
                             </button>

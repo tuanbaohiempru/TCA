@@ -43,7 +43,8 @@ QUY TẮC KỸ THUẬT (ACTION JSON):
 Nếu người dùng yêu cầu hành động cụ thể, hãy trả về JSON Block ở cuối câu trả lời.
 
 **TRƯỜNG HỢP 1: MƠ HỒ / TRÙNG TÊN (QUAN TRỌNG)**
-Nếu Context cung cấp nhiều khách hàng có tên giống nhau, hãy trả về action "SELECT_CUSTOMER" để người dùng chọn.
+Nếu Context cung cấp danh sách "DANH SÁCH ỨNG VIÊN" (nhiều khách hàng trùng tên), bạn TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ CHỌN.
+Hãy trả về action "SELECT_CUSTOMER" chứa danh sách này để người dùng chọn.
 \`\`\`json
 {
   "expert": "SUSAM_ADMIN",
@@ -59,7 +60,7 @@ Nếu Context cung cấp nhiều khách hàng có tên giống nhau, hãy trả 
 \`\`\`
 
 **TRƯỜNG HỢP 2: ĐẶT LỊCH HẸN (SUSAM_ADMIN)**
-Chỉ thực hiện khi đã xác định rõ 1 khách hàng cụ thể.
+Chỉ thực hiện khi đã xác định rõ 1 khách hàng cụ thể (Context có thông tin chi tiết 1 người).
 - Phân loại mục đích (type): "nhắc phí"->FEE_REMINDER, "sinh nhật"->BIRTHDAY, "giấy tờ"->PAPERWORK, "chăm sóc"->CARE_CALL, còn lại->CONSULTATION.
 \`\`\`json
 {
@@ -156,12 +157,14 @@ const callAI = async (payload: any, onStream?: (text: string) => void): Promise<
 
 /**
  * Helper: Extract Search Intent
+ * Uses a small prompt to see if user is looking for a person or product
  */
 const detectSearchIntent = async (query: string): Promise<{ type: 'CUSTOMER' | 'PRODUCT' | 'GENERAL'; entityName?: string }> => {
     try {
         const prompt = `
         Analyze query: "${query}"
-        Classify intent: CUSTOMER (hỏi người), PRODUCT (hỏi sản phẩm), GENERAL (khác).
+        Classify intent: CUSTOMER (searching for a person/client), PRODUCT (searching for insurance product), GENERAL (chat).
+        If CUSTOMER, extract the person's name as 'entityName'.
         Return JSON: { "type": "CUSTOMER" | "PRODUCT" | "GENERAL", "entityName": string | null }
         `;
         const res = await callAI({
@@ -187,13 +190,63 @@ export const chatWithData = async (
     onStream?: (chunk: string) => void
 ): Promise<{ text: string, action?: any }> => {
     
-    // 1. RAG: INTENT DETECTION
+    // 1. RAG: INTENT DETECTION & SEARCH
     let ragContext = "";
     
     // --- BUILD TIME CONTEXT ---
     const now = new Date();
     const days = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
     const timeContext = `THỜI GIAN HIỆN TẠI: ${days[now.getDay()]}, ngày ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}, lúc ${now.getHours()}:${now.getMinutes()}.`;
+
+    // --- SEARCH-FIRST LOGIC (Prevent Hallucination) ---
+    if (query && !imageBase64) {
+        const intent = await detectSearchIntent(query);
+        console.log(`[RAG] Intent: ${intent.type} - Entity: ${intent.entityName}`);
+
+        if (intent.type === 'CUSTOMER' && intent.entityName) {
+            // REAL DB SEARCH
+            const matchedCustomers = await searchCustomersByName(intent.entityName);
+            
+            if (matchedCustomers.length === 0) {
+                ragContext = `[HỆ THỐNG]: Không tìm thấy khách hàng nào có tên "${intent.entityName}" trong cơ sở dữ liệu. Hãy báo cho người dùng biết.`;
+            } else if (matchedCustomers.length > 1) {
+                // AMBIGUITY HANDLING
+                ragContext = `[CẢNH BÁO HỆ THỐNG - QUAN TRỌNG]: Tìm thấy ${matchedCustomers.length} khách hàng trùng tên "${intent.entityName}".
+                
+                DANH SÁCH ỨNG VIÊN (CANDIDATES):
+                ${matchedCustomers.map(c => JSON.stringify({
+                    id: c.id, 
+                    name: c.fullName, 
+                    info: `${c.phone || 'Không SĐT'} - ${c.job || c.occupation || 'Không nghề'}`
+                })).join('\n')}
+                
+                YÊU CẦU BẮT BUỘC: Bạn KHÔNG ĐƯỢC tự ý chọn một người. Bạn PHẢI trả về Action "SELECT_CUSTOMER" chứa danh sách candidates này để người dùng chọn.`;
+            } else {
+                // EXACT MATCH (1 person)
+                const cus = matchedCustomers[0];
+                ragContext = `KẾT QUẢ TRA CỨU KHÁCH HÀNG (Dùng thông tin này để xử lý):
+                --- HỒ SƠ KHÁCH HÀNG ---
+                ID: ${cus.id}
+                Họ tên: ${cus.fullName}
+                SĐT: ${cus.phone}
+                Nghề nghiệp: ${cus.job || cus.occupation}
+                Địa chỉ: ${cus.companyAddress}
+                Ngày sinh: ${cus.dob}
+                Tài chính: Thu nhập ${cus.analysis?.incomeMonthly?.toLocaleString()}đ, Vai trò: ${cus.financialRole}
+                Bảo hiểm hiện có: ${cus.analysis?.existingInsurance?.lifeSumAssured ? 'Có' : 'Chưa'}
+                Ghi chú gần nhất: ${cus.interactionHistory?.[0] || 'Chưa có'}
+                ------------------------`;
+            }
+        }
+        else if (intent.type === 'PRODUCT' && intent.entityName) {
+            const searchKey = intent.entityName.toLowerCase();
+            const products = appState.products || [];
+            const matchedProduct = products.find(p => p.name.toLowerCase().includes(searchKey) || p.code.toLowerCase().includes(searchKey));
+            if (matchedProduct && matchedProduct.extractedContent) {
+                 ragContext = `[TÀI LIỆU SẢN PHẨM: ${matchedProduct.name}]:\n${matchedProduct.extractedContent.substring(0, 30000)}`;
+            }
+        }
+    }
 
     // --- BUILD SCHEDULE CONTEXT ---
     const upcomingApps = appState.appointments
@@ -205,39 +258,6 @@ export const chatWithData = async (
         ? `LỊCH TRÌNH HIỆN CÓ (Để kiểm tra trùng lịch):\n${upcomingApps}` 
         : `LỊCH TRÌNH HIỆN CÓ: Trống.`;
 
-    if (query && !imageBase64) {
-        const intent = await detectSearchIntent(query);
-        console.log(`[RAG] Intent: ${intent.type} - Entity: ${intent.entityName}`);
-
-        if (intent.type === 'CUSTOMER' && intent.entityName) {
-            const matchedCustomers = await searchCustomersByName(intent.entityName);
-            
-            // LOGIC XỬ LÝ TRÙNG TÊN:
-            // Nếu tìm thấy > 1 người, AI cần biết chi tiết danh sách này để yêu cầu user chọn.
-            if (matchedCustomers.length === 0) {
-                ragContext = `[HỆ THỐNG]: Không tìm thấy khách hàng "${intent.entityName}".`;
-            } else if (matchedCustomers.length > 1) {
-                ragContext = `[CẢNH BÁO HỆ THỐNG]: Tìm thấy ${matchedCustomers.length} khách hàng trùng tên "${intent.entityName}".
-                DANH SÁCH ỨNG VIÊN:
-                ${matchedCustomers.map(c => `- ID: ${c.id}, Tên: ${c.fullName}, SĐT: ${c.phone}, Nghề: ${c.occupation || c.job}`).join('\n')}
-                
-                YÊU CẦU: Hãy trả về Action "SELECT_CUSTOMER" chứa danh sách candidates này để người dùng chọn. Đừng tự ý chọn.`;
-            } else {
-                // Chỉ có 1 người -> Cung cấp full context
-                const cus = matchedCustomers[0];
-                ragContext = `KẾT QUẢ TRA CỨU KHÁCH HÀNG:\n--- KHÁCH HÀNG: ${cus.fullName} ---\nID: ${cus.id}\nSĐT: ${cus.phone}\nThông tin tài chính: Thu nhập ${cus.analysis?.incomeMonthly?.toLocaleString()}đ, Vai trò: ${cus.financialRole}\nBảo hiểm hiện có: ${cus.analysis?.existingInsurance?.lifeSumAssured ? 'Có' : 'Chưa'}\n`;
-            }
-        }
-        else if (intent.type === 'PRODUCT' && intent.entityName) {
-            const searchKey = intent.entityName.toLowerCase();
-            const products = appState.products || [];
-            const matchedProduct = products.find(p => p.name.toLowerCase().includes(searchKey) || p.code.toLowerCase().includes(searchKey));
-            if (matchedProduct && matchedProduct.extractedContent) {
-                 ragContext = `[TÀI LIỆU SẢN PHẨM]:\n${matchedProduct.extractedContent.substring(0, 30000)}`;
-            }
-        }
-    }
-
     // 4. GENERATION
     const fullContext = `
     DỮ LIỆU HỆ THỐNG:
@@ -246,7 +266,7 @@ export const chatWithData = async (
     
     ${scheduleContext}
 
-    CONTEXT BỔ SUNG:
+    CONTEXT TRA CỨU (QUAN TRỌNG):
     ${ragContext}
     `;
 
@@ -258,6 +278,7 @@ export const chatWithData = async (
         ];
     }
 
+    // Filter valid history (remove empty initial model messages if any)
     const validHistory = history.filter((msg, index) => {
         if (index === 0 && msg.role === 'model') return false;
         return true;
@@ -288,7 +309,7 @@ export const chatWithData = async (
             const parsed = JSON.parse(jsonString);
             if (parsed.action) {
                 extractedAction = parsed;
-                // Xóa JSON khỏi text hiển thị để không bị rối mắt
+                // Clean JSON from display text
                 rawText = rawText.replace(match[0], '').trim();
             }
         } catch (e) {

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Customer, Contract, Appointment, CustomerStatus, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, FinancialPriority, RelationshipType, Illustration, FinancialStatus, PersonalityType, ReadinessLevel } from '../types';
+import { Customer, Contract, Appointment, CustomerStatus, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, FinancialPriority, RelationshipType, Illustration, FinancialStatus, PersonalityType, ReadinessLevel, AssetType, LiabilityType, FinancialAsset, FinancialLiability } from '../types';
 import { ConfirmModal, formatDateVN } from '../components/Shared';
 import ExcelImportModal from '../components/ExcelImportModal';
 import { downloadTemplate, processCustomerImport } from '../utils/excelHelpers';
@@ -119,8 +119,9 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
             const existPhone = normalize(c.phone);
             const existIdCard = normalize(c.idCard);
 
-            // Check Phone collision
-            if (newPhone && existPhone === newPhone) return true;
+            // Check Phone collision (ONLY if new phone is not empty)
+            if (newPhone && newPhone.length > 5 && existPhone === newPhone) return true;
+            
             // Check ID Card collision (only if length > 6 to avoid matching empty/short placeholders)
             if (newIdCard && newIdCard.length > 6 && existIdCard === newIdCard) return true;
 
@@ -142,8 +143,8 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
         setIsSaving(true);
         try {
             if (!formData.fullName) throw new Error("Vui lòng nhập Họ tên khách hàng");
-            if (!formData.phone) throw new Error("Vui lòng nhập Số điện thoại");
-
+            // Phone is now optional
+            
             // 1. Check Duplicates
             const duplicateError = checkDuplicate(formData);
             if (duplicateError) {
@@ -324,15 +325,18 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                         
                         {/* Scan Alert */}
                         {formData.interactionHistory[0]?.includes("Quét CCCD") && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 p-3 rounded-lg text-xs mb-4 flex items-center">
+                            <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 p-3 rounded-lg text-xs mb-4 flex items-center">
                                 <i className="fas fa-check-circle mr-2 text-lg"></i>
-                                <span>Đã điền tự động từ CCCD. Vui lòng bổ sung SĐT để hoàn tất.</span>
+                                <span>Đã trích xuất thông tin từ CCCD. Hãy kiểm tra lại.</span>
                             </div>
                         )}
 
                         <div className="space-y-4 mb-6">
                             <div><label className="label-text">Họ và tên *</label><input className="input-field" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} /></div>
-                            <div><label className="label-text">Số điện thoại *</label><input className="input-field" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Nhập SĐT..." autoFocus={!formData.phone} /></div>
+                            <div>
+                                <label className="label-text">Số điện thoại (Không bắt buộc)</label>
+                                <input className="input-field" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Để trống nếu là trẻ em..." />
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="label-text">Giới tính</label><select className="input-field" value={formData.gender} onChange={(e: any) => setFormData({...formData, gender: e.target.value})}>{Object.values(Gender).map(v => <option key={v} value={v}>{v}</option>)}</select></div>
                                 <div><label className="label-text">Ngày sinh</label><input type="date" className="input-field" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} /></div>

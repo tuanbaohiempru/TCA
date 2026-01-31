@@ -1,17 +1,17 @@
 
 import React, { useMemo, useCallback } from 'react';
-import {
-  ReactFlow,
+// Default import for the component
+import ReactFlow, {
   Background,
   Controls,
-  Edge,
-  Node,
   Position,
   useNodesState,
   useEdgesState,
   MarkerType,
   Handle
 } from 'reactflow';
+// Explicit type imports
+import type { Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { Customer, RelationshipType, CustomerStatus, Contract, ContractStatus } from '../types';

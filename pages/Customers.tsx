@@ -105,22 +105,23 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
     // --- SMART VALIDATION HANDLERS ---
 
     const checkDuplicate = (customer: Customer): string | null => {
-        // Normalize phone: remove spaces, dots, dashes
-        const normalize = (str: string) => str.replace(/[\s\.\-]/g, '');
+        // Normalize phone: remove spaces, dots, dashes. Handle non-string inputs safely.
+        const normalize = (str: any) => String(str || '').replace(/[\s\.\-]/g, '').toLowerCase();
+        
         const newPhone = normalize(customer.phone);
-        const newIdCard = customer.idCard ? normalize(customer.idCard) : '';
+        const newIdCard = normalize(customer.idCard);
 
         const duplicate = customers.find(c => {
             // Skip self check if updating
             if (customer.id && c.id === customer.id) return false;
 
             const existPhone = normalize(c.phone);
-            const existIdCard = c.idCard ? normalize(c.idCard) : '';
+            const existIdCard = normalize(c.idCard);
 
             // Check Phone collision
             if (newPhone && existPhone === newPhone) return true;
-            // Check ID Card collision
-            if (newIdCard && existIdCard === newIdCard) return true;
+            // Check ID Card collision (only if length > 6 to avoid matching empty/short placeholders)
+            if (newIdCard && newIdCard.length > 6 && existIdCard === newIdCard) return true;
 
             return false;
         });
@@ -137,18 +138,29 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
     };
 
     const handleSave = async () => {
-        if (!formData.fullName) return alert("Vui lòng nhập Họ tên khách hàng");
-        if (!formData.phone) return alert("Vui lòng nhập Số điện thoại");
+        try {
+            if (!formData.fullName) return alert("Vui lòng nhập Họ tên khách hàng");
+            if (!formData.phone) return alert("Vui lòng nhập Số điện thoại");
 
-        // 1. Check Duplicates
-        const duplicateError = checkDuplicate(formData);
-        if (duplicateError) {
-            alert(duplicateError);
-            return;
+            // 1. Check Duplicates
+            const duplicateError = checkDuplicate(formData);
+            if (duplicateError) {
+                alert(duplicateError);
+                return;
+            }
+
+            // 2. Ensure ID exists for UI consistency before Database generates real ID
+            const customerToSave = {
+                ...formData,
+                id: formData.id || Date.now().toString()
+            };
+
+            await onAdd(customerToSave);
+            setShowModal(false);
+        } catch (e) {
+            console.error(e);
+            alert("Đã xảy ra lỗi khi lưu khách hàng. Vui lòng kiểm tra lại dữ liệu.");
         }
-
-        await onAdd(formData);
-        setShowModal(false);
     };
 
     const handleDeleteClick = (c: Customer) => {
@@ -178,7 +190,8 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
         const uniqueOnes = [];
         for (const c of validCustomers) {
             if (!checkDuplicate(c)) {
-                uniqueOnes.push(c);
+                // Assign ID for batch import too
+                uniqueOnes.push({ ...c, id: Date.now().toString() + Math.random().toString(36).substr(2, 5) });
             }
         }
         if (uniqueOnes.length < validCustomers.length) {

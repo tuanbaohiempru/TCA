@@ -30,6 +30,7 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
     const [showModal, setShowModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false); 
     const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, id: string, name: string}>({ isOpen: false, id: '', name: '' });
+    const [isSaving, setIsSaving] = useState(false); // Add saving state
     
     // Scan ID State
     const [isScanning, setIsScanning] = useState(false);
@@ -138,15 +139,15 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
     };
 
     const handleSave = async () => {
+        setIsSaving(true);
         try {
-            if (!formData.fullName) return alert("Vui lòng nhập Họ tên khách hàng");
-            if (!formData.phone) return alert("Vui lòng nhập Số điện thoại");
+            if (!formData.fullName) throw new Error("Vui lòng nhập Họ tên khách hàng");
+            if (!formData.phone) throw new Error("Vui lòng nhập Số điện thoại");
 
             // 1. Check Duplicates
             const duplicateError = checkDuplicate(formData);
             if (duplicateError) {
-                alert(duplicateError);
-                return;
+                throw new Error(duplicateError);
             }
 
             // 2. Ensure ID exists for UI consistency before Database generates real ID
@@ -157,9 +158,11 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
 
             await onAdd(customerToSave);
             setShowModal(false);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            alert("Đã xảy ra lỗi khi lưu khách hàng. Vui lòng kiểm tra lại dữ liệu.");
+            alert(`LỖI: ${e.message || "Không thể lưu khách hàng."}`);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -339,7 +342,9 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                         </div>
                         <div className="flex justify-end gap-3">
                             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Hủy</button>
-                            <button onClick={handleSave} className="px-4 py-2 bg-pru-red text-white font-bold rounded-lg hover:bg-red-700 shadow-md">Lưu Nhanh</button>
+                            <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-pru-red text-white font-bold rounded-lg hover:bg-red-700 shadow-md flex items-center disabled:opacity-50">
+                                {isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i> Đang lưu...</> : 'Lưu Nhanh'}
+                            </button>
                         </div>
                         <p className="text-xs text-center text-gray-400 mt-4 italic">Hệ thống sẽ tự động kiểm tra trùng lặp SĐT/CCCD.</p>
                     </div>

@@ -24,40 +24,54 @@ const REASONING_MODEL = 'gemini-3-pro-preview';
 
 // --- SU SAM SQUAD SYSTEM PROMPT ---
 const SUSAM_SYSTEM_INSTRUCTION = `
-VAI TRÒ: Bạn là "TuanChom AI" - Siêu trợ lý quản lý công việc cho Tư vấn viên bảo hiểm Prudential.
+VAI TRÒ: Bạn là "SU SAM SQUAD" - Hệ thống 5 chuyên gia AI MDRT hỗ trợ Tư vấn viên bảo hiểm.
 
-NHIỆM VỤ CỦA BẠN:
-1. **Xử lý thông tin**: Hiểu yêu cầu người dùng.
-2. **Retrieval (Tra cứu)**: Tra cứu thông tin khách hàng/sản phẩm.
-3. **Thực thi (Action)**: Trả về JSON để App thực thi lệnh.
+DANH SÁCH 5 CHUYÊN GIA:
+1. **SUSAM_SALES** (Săn cơ hội): Phân tích nhu cầu (Gap Analysis), Gợi ý bán chéo (Up-sell/Cross-sell), Phân tích sự kiện đời sống (Life-event).
+2. **SUSAM_CRM** (Quản gia): Nhắc lịch, Dự báo rời bỏ (Churn), Tối ưu bồi thường (Claim), Làm giàu dữ liệu.
+3. **SUSAM_EXPERT** (Luật sư): Tra cứu điều khoản, Thẩm định sơ bộ (Pre-underwriting), Trích dẫn luật/quy tắc.
+4. **SUSAM_ADMIN** (Thư ký): Số hóa (OCR), Ghi chú cuộc họp, Quản lý biểu mẫu, Đặt lịch hẹn.
+5. **SUSAM_COACH** (Huấn luyện): Role-play, Phân tích kịch bản tư vấn, Xử lý từ chối.
 
-QUY TẮC ĐẶT LỊCH HẸN (QUAN TRỌNG NHẤT):
-1. **Kiểm tra trùng lịch**: Dựa vào danh sách "LỊCH TRÌNH HIỆN CÓ" bên dưới. Nếu trùng giờ, hãy cảnh báo.
-2. **Xác định ngày giờ**:
-   - Luôn tính toán ngày cụ thể dựa trên "Hôm nay là...".
-   - Ví dụ: Hôm nay 20/05/2024 -> "Ngày mai" là "2024-05-21".
-3. **OUTPUT JSON BẮT BUỘC**:
-   Khi người dùng CHỐT đặt lịch, bạn PHẢI trả về JSON chính xác theo mẫu sau (không được đổi tên key):
-   \`\`\`json
-   {
-     "action": "CREATE_APPOINTMENT",
-     "data": {
-       "customerName": "Tên đầy đủ của khách trong DB",
-       "date": "YYYY-MM-DD",  
-       "time": "HH:mm",
-       "title": "Nội dung cuộc hẹn"
-     }
-   }
-   \`\`\`
-   Lưu ý: Key phải chính xác là "date" (không phải day/datetime), "time" (không phải hour).
+QUY TẮC VẬN HÀNH:
+1. **Nhận diện Intent**: Dựa vào câu hỏi để chọn Chuyên gia phù hợp nhất trả lời.
+   - Ví dụ: Hỏi về điều khoản -> SUSAM_EXPERT. Hỏi về lịch hẹn/nhập liệu -> SUSAM_ADMIN.
+2. **Phong cách**: Bắt đầu câu trả lời bằng tên chuyên gia (VD: "[SUSAM_SALES] ..."). Trả lời ngắn gọn, chuyên nghiệp, sắc sảo.
+3. **Tra cứu dữ liệu**: Sử dụng dữ liệu KHÁCH HÀNG, HỢP ĐỒNG, LỊCH TRÌNH được cung cấp để đưa ra lời khuyên cá nhân hóa.
 
-QUY TẮC XỬ LÝ ẢNH CCCD/CMND:
-- Trả về JSON action 'CREATE_CUSTOMER' với đầy đủ thông tin trích xuất.
-- "phone": "" (Để trống nếu không có).
+QUY TẮC KỸ THUẬT (ACTION JSON):
+Nếu người dùng yêu cầu hành động cụ thể (Đặt lịch, Tạo hồ sơ), hãy trả về JSON Block ở cuối câu trả lời (sau phần text).
 
-QUY TẮC TRẢ LỜI CHUNG:
-- Trả lời ngắn gọn, thân thiện.
-- KHÔNG nói "Đã đặt lịch" nếu chưa trả về JSON action.
+**1. ĐẶT LỊCH HẸN (SUSAM_ADMIN):**
+- Kiểm tra "LỊCH TRÌNH HIỆN CÓ" để cảnh báo trùng giờ.
+- Luôn tính ngày cụ thể dựa trên "Hôm nay là...".
+- **QUAN TRỌNG**: Phân loại mục đích cuộc hẹn (type):
+  + "nhắc phí", "thu phí", "đóng tiền" -> "FEE_REMINDER"
+  + "sinh nhật", "quà", "chúc mừng" -> "BIRTHDAY"
+  + "giấy tờ", "claim", "bồi thường", "thủ tục" -> "PAPERWORK"
+  + "chăm sóc", "hỏi thăm", "tặng quà" -> "CARE_CALL"
+  + Mặc định (Tư vấn, gặp gỡ, cafe...) -> "CONSULTATION"
+
+Format JSON Đặt lịch:
+\`\`\`json
+{
+  "expert": "SUSAM_ADMIN",
+  "action": "CREATE_APPOINTMENT",
+  "data": {
+    "customerName": "Tên khách hàng",
+    "date": "YYYY-MM-DD",  
+    "time": "HH:mm",
+    "title": "Nội dung chi tiết/Ghi chú",
+    "type": "CONSULTATION"
+  },
+  "suggestion": "Lời khuyên thêm (nếu có)"
+}
+\`\`\`
+
+**2. XỬ LÝ ẢNH/OCR (SUSAM_ADMIN):**
+- Trả về JSON action 'CREATE_CUSTOMER' với thông tin trích xuất được.
+
+KHÔNG bịa đặt thông tin không có trong dữ liệu.
 `;
 
 /**
@@ -194,7 +208,7 @@ export const chatWithData = async (
             } else {
                 ragContext = `KẾT QUẢ TRA CỨU KHÁCH HÀNG (${matchedCustomers.length} người):\n`;
                 for (const cus of matchedCustomers) {
-                    ragContext += `\n--- KHÁCH HÀNG: ${cus.fullName} ---\nSĐT: ${cus.phone}\n`;
+                    ragContext += `\n--- KHÁCH HÀNG: ${cus.fullName} ---\nSĐT: ${cus.phone}\nThông tin tài chính: Thu nhập ${cus.analysis?.incomeMonthly?.toLocaleString()}đ, Vai trò: ${cus.financialRole}\nBảo hiểm hiện có: ${cus.analysis?.existingInsurance?.lifeSumAssured ? 'Có' : 'Chưa'}\n`;
                 }
             }
         }
@@ -224,7 +238,7 @@ export const chatWithData = async (
     let messageContent: any = query;
     if (imageBase64) {
         messageContent = [
-            { text: query || "Phân tích hình ảnh này." },
+            { text: query || "Phân tích hình ảnh này và trích xuất thông tin." },
             { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
         ];
     }
@@ -273,14 +287,151 @@ export const chatWithData = async (
     };
 };
 
-// ... Exports cũ giữ nguyên ...
-export const generateActionScript = async (t: any, c: any) => null; 
-export const extractPdfText = async (u: string) => "";
-export const extractIdentityCard = async (b: string) => null;
-export const consultantChat = async (...args: any[]) => "";
-export const getObjectionSuggestions = async (m: string, c: any) => [];
-export const generateSocialPost = async (t: string, tone: string) => [];
-export const generateContentSeries = async (t: string) => [];
-export const generateStory = async (f: string, e: string) => "";
-export const analyzeSocialInput = async (i: any, n: string) => null;
-export const processVoiceCommand = async (t: string, c: any) => null;
+// --- IMPLEMENTED HELPERS ---
+
+export const generateActionScript = async (task: any, customer: any) => {
+    const prompt = `
+    VAI TRÒ: SUSAM_SALES.
+    NHIỆM VỤ: Soạn kịch bản tiếp cận khách hàng.
+    BỐI CẢNH: ${task.why}
+    MỤC TIÊU: ${task.title} (Loại: ${task.category})
+    KHÁCH HÀNG: ${customer.fullName}, ${customer.age} tuổi, ${customer.job}.
+    
+    OUTPUT JSON: { "opening": "Câu chào thu hút", "core_message": "Nội dung chính thuyết phục" }
+    `;
+    const res = await callAI({ 
+        endpoint: 'generateContent', 
+        model: DEFAULT_MODEL, 
+        contents: prompt, 
+        config: { responseMimeType: "application/json" } 
+    });
+    try { return JSON.parse(res.text || '{}'); } catch { return null; }
+};
+
+export const extractPdfText = async (url: string) => {
+    if (isFirebaseReady && functions) {
+        const gateway = httpsCallable(functions as Functions, 'geminiGateway');
+        try {
+            const result: any = await gateway({ endpoint: 'extractText', url });
+            return result.data.text;
+        } catch (e) {
+            console.error("PDF Extract Error", e);
+            return "";
+        }
+    }
+    return "Tính năng đọc PDF yêu cầu Cloud Functions.";
+};
+
+export const extractIdentityCard = async (base64Image: string) => {
+    const prompt = `
+    Extract info from Vietnamese ID Card (CCCD).
+    Output JSON: { "fullName": "", "idCard": "", "dob": "YYYY-MM-DD", "gender": "Nam/Nữ", "companyAddress": "Address on card" }
+    `;
+    const res = await callAI({
+        endpoint: 'generateContent',
+        model: DEFAULT_MODEL,
+        contents: [
+            { text: prompt },
+            { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+        ],
+        config: { responseMimeType: "application/json" }
+    });
+    try { return JSON.parse(res.text || 'null'); } catch { return null; }
+};
+
+export const consultantChat = async (
+    userMsg: string, customer: any, contracts: any[], 
+    relationships: any[], agent: any, goal: string, 
+    history: any[], role: string, plan: any, style: string
+) => {
+    const systemPrompt = `
+    ROLEPLAY MODE: ${role === 'customer' ? 'AI là KHÁCH HÀNG KHÓ TÍNH' : 'AI là SUPER CONSULTANT (Mentor)'}.
+    GOAL: ${goal}.
+    STYLE: ${style}.
+    CUSTOMER INFO: ${JSON.stringify(customer)}.
+    CONTRACTS: ${JSON.stringify(contracts)}.
+    `;
+    
+    // Construct message history for chat
+    const chatHistory = history.map(h => ({
+        role: h.role === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }]
+    }));
+
+    const res = await callAI({
+        endpoint: 'chat',
+        model: DEFAULT_MODEL,
+        systemInstruction: systemPrompt,
+        message: userMsg,
+        history: chatHistory
+    });
+    return res.text;
+};
+
+export const getObjectionSuggestions = async (lastMsg: string, customer: any) => {
+    const prompt = `
+    Context: Khách hàng vừa nói: "${lastMsg}".
+    Customer: ${customer.fullName}, ${customer.analysis?.personality}.
+    Task: Gợi ý 3 cách trả lời cho Tư vấn viên.
+    1. Empathy (Đồng cảm)
+    2. Logic (Lý trí/Số liệu)
+    3. Counter-question (Hỏi ngược lại)
+    
+    Output JSON: [{ "type": "empathy", "label": "Đồng cảm", "content": "..." }, ...]
+    `;
+    const res = await callAI({
+        endpoint: 'generateContent',
+        model: DEFAULT_MODEL,
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+    try { return JSON.parse(res.text || '[]'); } catch { return []; }
+};
+
+export const generateSocialPost = async (topic: string, tone: string) => {
+    const prompt = `
+    Write 3 Facebook posts about: "${topic}".
+    Tone: ${tone}.
+    Output JSON: [{ "title": "Headline", "content": "Full post content..." }, ...]
+    `;
+    const res = await callAI({
+        endpoint: 'generateContent',
+        model: DEFAULT_MODEL,
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+    try { return JSON.parse(res.text || '[]'); } catch { return []; }
+};
+
+export const generateContentSeries = async (topic: string, context?: any) => {
+    const prompt = `
+    Create a 5-day content series for insurance marketing. Topic: ${topic}.
+    Target Audience: General.
+    Output JSON array: [{ "day": "Ngày 1", "type": "Hook", "content": "..." }, ...]
+    Language: Vietnamese.
+    `;
+    const res = await callAI({
+        endpoint: 'generateContent',
+        model: DEFAULT_MODEL,
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+    try { return JSON.parse(res.text || '[]'); } catch { return []; }
+};
+
+export const generateStory = async (facts: string, emotion: string) => {
+    const prompt = `
+    Write a short storytelling post based on facts: "${facts}".
+    Emotion: ${emotion}.
+    Language: Vietnamese.
+    `;
+    const res = await callAI({
+        endpoint: 'generateContent',
+        model: DEFAULT_MODEL,
+        contents: prompt
+    });
+    return res.text;
+};
+
+export const analyzeSocialInput = async (input: any, network: string) => null;
+export const processVoiceCommand = async (text: string, context: any) => null;

@@ -157,6 +157,17 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     }
   };
 
+  // --- Helper: Map Type string from AI to Enum ---
+  const mapAppointmentType = (typeKey: string): AppointmentType => {
+      switch (typeKey) {
+          case 'FEE_REMINDER': return AppointmentType.FEE_REMINDER;
+          case 'BIRTHDAY': return AppointmentType.BIRTHDAY;
+          case 'CARE_CALL': return AppointmentType.CARE_CALL;
+          case 'PAPERWORK': return AppointmentType.PAPERWORK;
+          default: return AppointmentType.CONSULTATION;
+      }
+  };
+
   // --- Action Execution ---
   const executeAction = async (action: any) => {
       console.log("🔥 EXECUTE ACTION:", action); // DEBUG LOG
@@ -192,16 +203,19 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
               // Find Customer
               const customer = state.customers.find(c => c.fullName.toLowerCase().includes(data.customerName.toLowerCase()));
               
+              // Determine Type from AI data or default
+              const appType = mapAppointmentType(data.type);
+
               await addData(COLLECTIONS.APPOINTMENTS, {
                   customerId: customer?.id || 'unknown',
                   customerName: data.customerName,
                   date: data.date, // Format YYYY-MM-DD from Gemini
                   time: data.time, // Format HH:mm from Gemini
-                  type: AppointmentType.CONSULTATION,
+                  type: appType,
                   status: AppointmentStatus.UPCOMING,
                   note: data.title || 'Lịch hẹn từ AI'
               });
-              setMessages(prev => [...prev, { role: 'model', text: `📅 Đã đặt lịch: **${data.time} - ${data.date}** với ${data.customerName}.`, isAction: true }]);
+              setMessages(prev => [...prev, { role: 'model', text: `📅 Đã đặt lịch: **${data.time} - ${data.date}** với ${data.customerName} (Loại: ${appType}).`, isAction: true }]);
           }
           else if (action.action === 'ADD_NOTE') {
               const { data } = action;

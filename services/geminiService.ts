@@ -1,3 +1,4 @@
+
 import { httpsCallable, Functions } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
 // IMPORTANT: Use '@google/genai' (New SDK) for Gemini 1.5/2.0 models.
@@ -28,12 +29,13 @@ Bạn có khả năng "nhìn" (qua ảnh), "nghe" (qua giọng nói) và thực 
 NHIỆM VỤ CỦA BẠN:
 1. **Xử lý thông tin**: Hiểu yêu cầu người dùng.
 2. **Retrieval (Tra cứu)**: Nếu người dùng hỏi về một khách hàng cụ thể, hệ thống sẽ cung cấp dữ liệu của khách hàng đó. Hãy dùng dữ liệu đó để trả lời.
-3. **Thực thi (Action)**: Khi đã đủ thông tin, hãy trả về JSON đặc biệt để App thực thi lệnh.
+3. **Thực thi (Action)**: Khi đã đủ thông tin, hãy trả về JSON đặc biệt để App thực thi lệnh (Ví dụ: tạo khách hàng, đặt lịch).
 4. **Tư vấn Quyền lợi**: Sử dụng thông tin chi tiết về sản phẩm (nếu có trong context) để trả lời chính xác số tiền/quyền lợi.
 
 QUY TẮC TRẢ LỜI:
 - Trả lời ngắn gọn, thân thiện, xưng "em", gọi "anh/chị".
 - Dùng Markdown để định dạng đẹp (Bold, List).
+- Nếu cần thực hiện hành động, hãy trả về JSON action ở cuối câu trả lời.
 `;
 
 /**
@@ -228,22 +230,34 @@ export const chatWithData = async (
     };
 
     const result = await callAI(payload);
-    const rawText = result.text || "";
+    let rawText = result.text || "";
+    let extractedAction = null;
 
-    try {
-        const jsonMatch = rawText.match(/\{[\s\S]*"type":\s*"ACTION"[\s\S]*\}/);
-        if (jsonMatch) {
-            const actionJson = JSON.parse(jsonMatch[0]);
-            return { 
-                text: actionJson.confirmMessage || "Đã xử lý yêu cầu.", 
-                action: actionJson 
-            };
+    // --- JSON BLOCK EXTRACTION & CLEANUP ---
+    // Look for ```json ... ``` blocks OR raw JSON objects at the end of the string
+    const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```|(\{(?:[^{}]|\{(?:[^{}]|1)*\})*\})\s*$/;
+    
+    const match = rawText.match(jsonBlockRegex);
+    if (match) {
+        const jsonString = match[1] || match[2]; // match[1] is markdown content, match[2] is raw json
+        try {
+            const parsed = JSON.parse(jsonString);
+            
+            // Heuristic check: is it an Action object? (contains 'action' or 'type')
+            if (parsed.action || parsed.type) {
+                extractedAction = parsed;
+                // Remove the JSON block from the text shown to the user
+                rawText = rawText.replace(match[0], '').trim();
+            }
+        } catch (e) {
+            console.warn("Failed to parse JSON in response", e);
         }
-    } catch (e) {
-        console.error("Failed to parse Action JSON", e);
     }
 
-    return { text: rawText };
+    return { 
+        text: rawText, 
+        action: extractedAction 
+    };
 };
 
 // ... KEEP EXISTING EXPORTS ...

@@ -24,8 +24,10 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   
   // Chat State
   const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; isAction?: boolean }[]>([
-    { role: 'model', text: 'Xin chào! Em là **TuanChom AI**. \nEm có thể giúp anh:\n- Quét CCCD để tạo khách hàng\n- Đặt lịch hẹn, ghi chú nhanh\n- Tra cứu Hợp đồng & Sản phẩm\n\nHãy nhắn hoặc gửi ảnh cho em nhé!' }
+  const DEFAULT_WELCOME = { role: 'model' as const, text: 'Xin chào! Em là **TuanChom AI**. \nEm có thể giúp anh:\n- Quét CCCD để tạo khách hàng\n- Đặt lịch hẹn, ghi chú nhanh\n- Tra cứu Hợp đồng & Sản phẩm\n\nHãy nhắn hoặc gửi ảnh cho em nhé!' };
+  
+  const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; isAction?: boolean; actionData?: any }[]>([
+    DEFAULT_WELCOME
   ]);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -51,6 +53,15 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
         setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen, messages]);
+
+  // --- Reset Context Logic ---
+  const handleResetChat = () => {
+      if (window.confirm("Bắt đầu đoạn chat mới? (Lịch sử cũ sẽ bị xóa)")) {
+          setMessages([DEFAULT_WELCOME]);
+          setQuery('');
+          setAttachment(null);
+      }
+  };
 
   // --- Voice Setup ---
   useEffect(() => {
@@ -92,14 +103,14 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   };
 
   // --- Send Logic ---
-  const handleSend = async () => {
-    if ((!query.trim() && !attachment)) return;
+  const handleSend = async (manualQuery?: string) => {
+    const textToSend = manualQuery || query;
+    if ((!textToSend.trim() && !attachment)) return;
 
-    const userText = query;
     const userImage = attachment;
     
     // UI Update: User Message
-    const displayMsg = userImage ? `[Đã gửi 1 ảnh] ${userText}` : userText;
+    const displayMsg = userImage ? `[Đã gửi 1 ảnh] ${textToSend}` : textToSend;
     
     setMessages(prev => [
         ...prev, 
@@ -107,13 +118,13 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
         { role: 'model', text: '' } // Placeholder for streaming
     ]);
     
-    setQuery('');
+    if (!manualQuery) setQuery(''); // Only clear if input manually
     setAttachment(null);
     setIsLoading(true);
 
     try {
         const response = await chatWithData(
-            userText, 
+            textToSend, 
             userImage ? userImage.split(',')[1] : null, 
             state, 
             messages, 
@@ -135,6 +146,10 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
             const lastIndex = newMsgs.length - 1;
             if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
                 newMsgs[lastIndex].text = response.text; 
+                // Store action data if present for rendering UI
+                if (response.action) {
+                    newMsgs[lastIndex].actionData = response.action;
+                }
             }
             return newMsgs;
         });
@@ -173,7 +188,11 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
       console.log("🔥 EXECUTE ACTION:", action); // DEBUG LOG
 
       try {
-          if (action.action === 'CREATE_CUSTOMER') {
+          if (action.action === 'SELECT_CUSTOMER') {
+              // Do nothing here, UI will render options based on `actionData` in `messages`
+              // Logic is handled in render
+          }
+          else if (action.action === 'CREATE_CUSTOMER') {
               const { data } = action;
               const newCustomer: Customer = {
                   id: '', 
@@ -217,20 +236,17 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
               });
               setMessages(prev => [...prev, { role: 'model', text: `📅 Đã đặt lịch: **${data.time} - ${data.date}** với ${data.customerName} (Loại: ${appType}).`, isAction: true }]);
           }
-          else if (action.action === 'ADD_NOTE') {
-              const { data } = action;
-              const customer = state.customers.find(c => c.fullName.toLowerCase().includes(data.customerName.toLowerCase()));
-              if (customer) {
-                  // Real app would update `customers` collection.
-                  setMessages(prev => [...prev, { role: 'model', text: `📝 Đã lưu ghi chú cho **${data.customerName}**.`, isAction: true }]);
-              } else {
-                  setMessages(prev => [...prev, { role: 'model', text: `⚠️ Không tìm thấy khách hàng "${data.customerName}" để lưu ghi chú.` }]);
-              }
-          }
       } catch (e: any) {
           console.error("Action Error", e);
           setMessages(prev => [...prev, { role: 'model', text: `❌ Lỗi thực thi: ${e.message}` }]);
       }
+  };
+
+  const handleSelection = (candidate: any) => {
+      // Send a hidden message to AI indicating selection
+      // This helps AI context know who was picked
+      const selectionText = `Tôi chọn: ${candidate.name} (ID: ${candidate.id}). Hãy tiếp tục thực hiện yêu cầu cho khách hàng này.`;
+      handleSend(selectionText);
   };
 
   const containerClasses = isExpanded
@@ -255,7 +271,11 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                     <p className="text-[10px] opacity-80">Online • MDRT Support Mode</p>
                 </div>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
+                 {/* RESET BUTTON */}
+                 <button onClick={handleResetChat} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded text-white/80 hover:text-white" title="Đoạn chat mới">
+                    <i className="fas fa-eraser"></i>
+                 </button>
                  <button onClick={() => setIsExpanded(!isExpanded)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded"><i className={`fas ${isExpanded ? 'fa-compress-alt' : 'fa-expand-alt'}`}></i></button>
                  <button onClick={() => setIsOpen(false)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded"><i className="fas fa-times"></i></button>
             </div>
@@ -264,17 +284,41 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs mr-2 flex-shrink-0 border border-red-200"><i className="fas fa-robot"></i></div>}
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm leading-relaxed ${
-                    msg.role === 'user' ? 'bg-red-600 text-white rounded-br-none' : 
-                    msg.isAction ? 'bg-green-50 text-green-800 border border-green-200' : 
-                    'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
-                }`}>
-                    {msg.isAction && <div className="mb-1 text-green-600 font-bold text-xs uppercase"><i className="fas fa-check-circle mr-1"></i> Hoàn thành</div>}
-                    
-                    <div dangerouslySetInnerHTML={{ __html: msg.text ? msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') : '<span class="text-gray-400 italic">...</span>' }} />
+              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
+                    {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs mr-2 flex-shrink-0 border border-red-200"><i className="fas fa-robot"></i></div>}
+                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm leading-relaxed ${
+                        msg.role === 'user' ? 'bg-red-600 text-white rounded-br-none' : 
+                        msg.isAction ? 'bg-green-50 text-green-800 border border-green-200' : 
+                        'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
+                    }`}>
+                        {msg.isAction && <div className="mb-1 text-green-600 font-bold text-xs uppercase"><i className="fas fa-check-circle mr-1"></i> Hoàn thành</div>}
+                        
+                        <div dangerouslySetInnerHTML={{ __html: msg.text ? msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') : '<span class="text-gray-400 italic">...</span>' }} />
+                    </div>
                 </div>
+
+                {/* RENDER SELECTION CARDS IF ACTION IS SELECT_CUSTOMER */}
+                {msg.actionData && msg.actionData.action === 'SELECT_CUSTOMER' && (
+                    <div className="ml-10 mt-2 grid grid-cols-1 gap-2 w-[85%]">
+                        {msg.actionData.data.candidates.map((c: any, cIdx: number) => (
+                            <button 
+                                key={c.id} 
+                                onClick={() => handleSelection(c)}
+                                className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm hover:border-red-300 hover:bg-red-50 transition text-left flex items-center gap-3 group"
+                            >
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 group-hover:text-red-500">
+                                    {c.name.charAt(0)}
+                                </div>
+                                <div className="flex-1">
+                                    <p className="font-bold text-sm text-gray-800">{c.name}</p>
+                                    <p className="text-xs text-gray-500">{c.info}</p>
+                                </div>
+                                <i className="fas fa-chevron-right text-gray-300 group-hover:text-red-500"></i>
+                            </button>
+                        ))}
+                    </div>
+                )}
               </div>
             ))}
             
@@ -314,7 +358,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                     <i className={`fas ${isListening ? 'fa-microphone-slash' : 'fa-microphone'}`}></i>
                 </button>
                 
-                <button onClick={handleSend} disabled={(!query.trim() && !attachment) || isLoading} className="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 disabled:opacity-50 disabled:bg-gray-300 shadow-md flex-shrink-0">
+                <button onClick={() => handleSend()} disabled={(!query.trim() && !attachment) || isLoading} className="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 disabled:opacity-50 disabled:bg-gray-300 shadow-md flex-shrink-0">
                     <i className="fas fa-paper-plane"></i>
                 </button>
             </div>

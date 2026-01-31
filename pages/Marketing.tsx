@@ -39,7 +39,7 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ profile }) => {
     const handleGenerateSeries = async () => {
         if (!seriesTopic.trim()) return alert("Vui lòng nhập tên chiến dịch!");
         setIsGenerating(true);
-        const results = await generateContentSeries(seriesTopic);
+        const results = await generateContentSeries(seriesTopic, profile);
         setSeriesData(results);
         setIsGenerating(false);
     };

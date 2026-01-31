@@ -99,7 +99,13 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     
     // UI Update: User Message
     const displayMsg = userImage ? `[Đã gửi 1 ảnh] ${userText}` : userText;
-    setMessages(prev => [...prev, { role: 'user', text: displayMsg }]);
+    
+    // Create new message array with User message AND a placeholder for Model message
+    setMessages(prev => [
+        ...prev, 
+        { role: 'user', text: displayMsg },
+        { role: 'model', text: '' } // Placeholder for streaming
+    ]);
     
     // Reset Input
     setQuery('');
@@ -107,11 +113,34 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     setIsLoading(true);
 
     try {
-        // Call Unified AI Service
-        const response = await chatWithData(userText, userImage ? userImage.split(',')[1] : null, state, messages);
+        // Call Unified AI Service with STREAMING CALLBACK
+        const response = await chatWithData(
+            userText, 
+            userImage ? userImage.split(',')[1] : null, 
+            state, 
+            messages, // Note: this `messages` is stale inside closure, but geminiService cleans history
+            (chunk) => {
+                // UPDATE STREAMING MESSAGE REAL-TIME
+                setMessages(prev => {
+                    const newMsgs = [...prev];
+                    const lastIndex = newMsgs.length - 1;
+                    if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
+                        newMsgs[lastIndex].text += chunk;
+                    }
+                    return newMsgs;
+                });
+            }
+        );
         
-        // Render Model Response
-        setMessages(prev => [...prev, { role: 'model', text: response.text }]);
+        // Final update to ensure text consistency (e.g. cleaning JSON blocks)
+        setMessages(prev => {
+            const newMsgs = [...prev];
+            const lastIndex = newMsgs.length - 1;
+            if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
+                newMsgs[lastIndex].text = response.text; // Replace with final clean text
+            }
+            return newMsgs;
+        });
 
         // Execute Action if present
         if (response.action) {
@@ -119,7 +148,14 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
         }
 
     } catch (e) {
-        setMessages(prev => [...prev, { role: 'model', text: "Lỗi hệ thống. Vui lòng thử lại." }]);
+        setMessages(prev => {
+            const newMsgs = [...prev];
+            const lastIndex = newMsgs.length - 1;
+            if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
+                newMsgs[lastIndex].text = "Lỗi hệ thống. Vui lòng thử lại.";
+            }
+            return newMsgs;
+        });
     } finally {
         setIsLoading(false);
     }
@@ -157,10 +193,9 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                   customerName: data.customerName,
                   date: data.date,
                   time: data.time,
-                  title: data.title || 'Lịch hẹn từ AI',
                   type: AppointmentType.CONSULTATION,
                   status: AppointmentStatus.UPCOMING,
-                  note: 'AI created'
+                  note: data.title || 'Lịch hẹn từ AI'
               });
               setMessages(prev => [...prev, { role: 'model', text: `📅 Đã đặt lịch: **${data.time} - ${data.date}** với ${data.customerName}.`, isAction: true }]);
           }
@@ -230,11 +265,18 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                     'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
                 }`}>
                     {msg.isAction && <div className="mb-1 text-green-600 font-bold text-xs uppercase"><i className="fas fa-check-circle mr-1"></i> Hoàn thành</div>}
-                    <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') }} />
+                    
+                    {/* Render with basic Markdown logic, filtering out incomplete JSON blocks if desired, though here we just render all */}
+                    <div dangerouslySetInnerHTML={{ __html: msg.text ? msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') : '<span class="text-gray-400 italic">...</span>' }} />
                 </div>
               </div>
             ))}
-            {isLoading && <div className="flex items-center gap-2 text-gray-400 text-xs ml-10"><i className="fas fa-circle-notch fa-spin"></i> Đang xử lý...</div>}
+            
+            {/* Show tiny indicator if system is still processing action logic but text is done */}
+            {isLoading && messages.length > 0 && messages[messages.length-1].text.length > 0 && (
+                 <div className="flex items-center gap-2 text-gray-400 text-[10px] ml-10 opacity-70"><i className="fas fa-circle-notch fa-spin"></i> Hoàn tất...</div>
+            )}
+            
             <div ref={messagesEndRef} />
           </div>
 
@@ -256,7 +298,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                 <textarea 
                     ref={inputRef}
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2.5 max-h-32 resize-none"
-                    placeholder={isListening ? "Đang nghe..." : "Nhập yêu cầu hoặc gửi ảnh..."}
+                    placeholder={isListening ? "Đang nghe..." : "Nhập yêu cầu..."}
                     rows={1}
                     value={query}
                     onChange={e => setQuery(e.target.value)}

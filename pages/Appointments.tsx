@@ -53,6 +53,16 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
         setShowModal(false);
     };
 
+    const handleEdit = (a: Appointment) => {
+        setFormData(a);
+        setIsEditing(true);
+        setShowModal(true);
+    };
+
+    const handleDelete = (id: string) => {
+        setDeleteConfirm({ isOpen: true, id });
+    };
+
     const submitOutcome = async () => {
         const a = outcomeModal.appointment;
         if (a) {
@@ -119,11 +129,11 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
         <div className="flex flex-col h-full bg-gray-100 dark:bg-black relative">
             <div className="bg-white dark:bg-pru-card px-4 py-3 flex justify-between items-center shadow-sm border-b border-gray-100 dark:border-gray-800 flex-shrink-0 z-20">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 text-gray-400"><i className="fas fa-chevron-left"></i></button>
+                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 text-gray-400 hover:text-gray-600"><i className="fas fa-chevron-left"></i></button>
                     <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 uppercase">Tháng {currentDate.getMonth() + 1}/{currentDate.getFullYear()}</h2>
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 text-gray-400"><i className="fas fa-chevron-right"></i></button>
+                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 text-gray-400 hover:text-gray-600"><i className="fas fa-chevron-right"></i></button>
                 </div>
-                <button onClick={() => setShowModal(true)} className="bg-pru-red text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg"><i className="fas fa-plus"></i></button>
+                <button onClick={() => { setFormData(defaultForm); setIsEditing(false); setShowModal(true); }} className="bg-pru-red text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 transition"><i className="fas fa-plus"></i></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -138,7 +148,7 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
                         const isSelected = selectedDate === dateStr;
                         const hasTasks = appointments.some(a => a.date === dateStr && a.status === AppointmentStatus.UPCOMING);
                         return (
-                            <button key={d} onClick={() => setSelectedDate(dateStr)} className={`h-10 rounded-lg flex flex-col items-center justify-center relative transition ${isSelected ? 'bg-pru-red text-white shadow-md' : 'bg-white dark:bg-pru-card text-gray-700 dark:text-gray-300'}`}>
+                            <button key={d} onClick={() => setSelectedDate(dateStr)} className={`h-10 rounded-lg flex flex-col items-center justify-center relative transition ${isSelected ? 'bg-pru-red text-white shadow-md' : 'bg-white dark:bg-pru-card text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                                 <span className="text-xs font-bold">{d}</span>
                                 {hasTasks && <div className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-red-500'}`}></div>}
                             </button>
@@ -151,7 +161,7 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
                     <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest px-1">Lịch trình ngày {formatDateVN(selectedDate)}</h3>
                     {dailyAppointments.length > 0 ? (
                         dailyAppointments.map(a => (
-                            <div key={a.id} className={`bg-white dark:bg-pru-card rounded-2xl p-4 shadow-sm border-l-4 ${getTypeColor(a.type)} ${a.status === AppointmentStatus.COMPLETED ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                            <div key={a.id} className={`bg-white dark:bg-pru-card rounded-2xl p-4 shadow-sm border-l-4 ${getTypeColor(a.type)} ${a.status === AppointmentStatus.COMPLETED ? 'opacity-60 grayscale-[0.5]' : ''} group relative transition hover:shadow-md`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <p className="text-[10px] font-bold text-gray-400 uppercase">{a.time} • {a.type}</p>
@@ -161,7 +171,9 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
                                         <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">✅ {a.outcome}</span>
                                     ) : (
                                         <div className="flex gap-1">
-                                            <button onClick={() => setOutcomeModal({isOpen: true, appointment: a})} className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center"><i className="fas fa-check-double"></i></button>
+                                            <button onClick={() => handleEdit(a)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-blue-500 flex items-center justify-center"><i className="fas fa-pen text-xs"></i></button>
+                                            <button onClick={() => handleDelete(a.id)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-red-500 flex items-center justify-center"><i className="fas fa-trash text-xs"></i></button>
+                                            <button onClick={() => setOutcomeModal({isOpen: true, appointment: a})} className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100"><i className="fas fa-check-double text-xs"></i></button>
                                         </div>
                                     )}
                                 </div>
@@ -205,7 +217,7 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Ghi chú quan trọng</label>
                                 <textarea 
-                                    className="w-full p-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-pru-red/20"
+                                    className="w-full p-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-pru-red/20 text-gray-800 dark:text-gray-100"
                                     rows={3}
                                     placeholder="Ví dụ: Khách băn khoăn về phí, cần gửi thêm bảng minh họa gói cho con..."
                                     value={outcomeData.note}
@@ -237,21 +249,92 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ appointments, custo
                 </div>
             )}
 
-            {/* ADD/EDIT MODAL (Simplified placeholder) */}
+            {/* ADD/EDIT MODAL */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white dark:bg-pru-card rounded-3xl w-full max-w-sm p-6">
-                        <h3 className="font-bold mb-4">Thêm lịch hẹn</h3>
-                        <SearchableCustomerSelect customers={customers} value={formData.customerName} onChange={c => setFormData({...formData, customerId: c.id, customerName: c.fullName})} />
-                        <div className="grid grid-cols-2 gap-2 mt-4">
-                            <input type="date" className="bg-gray-50 border p-2 rounded-lg text-sm" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-                            <input type="time" className="bg-gray-50 border p-2 rounded-lg text-sm" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-pru-card rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-gray-100 dark:border-gray-700 transition-colors">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{isEditing ? 'Cập nhật' : 'Thêm'} lịch hẹn</h3>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
                         </div>
-                        <button onClick={handleSave} className="w-full mt-4 bg-pru-red text-white py-3 rounded-xl font-bold">Lưu</button>
-                        <button onClick={() => setShowModal(false)} className="w-full mt-2 text-gray-400 text-xs">Đóng</button>
+                        
+                        <div className="space-y-4">
+                            <SearchableCustomerSelect 
+                                customers={customers} 
+                                value={formData.customerName} 
+                                onChange={c => setFormData({...formData, customerId: c.id, customerName: c.fullName})}
+                                label="Khách hàng"
+                            />
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="label-text">Ngày</label>
+                                    <input 
+                                        type="date" 
+                                        className="input-field py-2" 
+                                        value={formData.date} 
+                                        onChange={e => setFormData({...formData, date: e.target.value})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-text">Giờ</label>
+                                    <input 
+                                        type="time" 
+                                        className="input-field py-2" 
+                                        value={formData.time} 
+                                        onChange={e => setFormData({...formData, time: e.target.value})} 
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="label-text">Mục đích</label>
+                                <select 
+                                    className="input-field py-2" 
+                                    value={formData.type} 
+                                    onChange={e => setFormData({...formData, type: e.target.value as AppointmentType})}
+                                >
+                                    {Object.values(AppointmentType).map(t => (
+                                        <option key={t} value={t}>{t}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="label-text">Ghi chú</label>
+                                <textarea 
+                                    className="input-field min-h-[80px]" 
+                                    rows={3} 
+                                    placeholder="Nội dung chi tiết..."
+                                    value={formData.note}
+                                    onChange={e => setFormData({...formData, note: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex gap-3">
+                            <button onClick={() => setShowModal(false)} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-sm">Hủy</button>
+                            <button onClick={handleSave} className="flex-1 py-3 bg-pru-red text-white rounded-xl font-bold text-sm hover:bg-red-700 transition shadow-md">Lưu</button>
+                        </div>
                     </div>
                 </div>
             )}
+
+            <ConfirmModal 
+                isOpen={deleteConfirm.isOpen} 
+                title="Xóa lịch hẹn?" 
+                message="Bạn có chắc chắn muốn xóa lịch hẹn này không?" 
+                onConfirm={() => onDelete(deleteConfirm.id)} 
+                onClose={() => setDeleteConfirm({ isOpen: false, id: '' })} 
+            />
+
+            <style>{`
+                .label-text { display: block; font-size: 0.7rem; font-weight: 700; color: #6b7280; margin-bottom: 0.25rem; text-transform: uppercase; }
+                .dark .label-text { color: #9ca3af; }
+                .input-field { width: 100%; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.5rem; outline: none; font-size: 0.875rem; transition: all; background-color: #fff; color: #111827; }
+                .dark .input-field { background-color: #111827; border-color: #374151; color: #f3f4f6; }
+                .input-field:focus { border-color: #ed1b2e; ring: 1px solid #ed1b2e; }
+            `}</style>
         </div>
     );
 };

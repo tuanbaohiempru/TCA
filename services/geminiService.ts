@@ -99,13 +99,20 @@ const callAI = async (payload: any, onStream?: (text: string) => void): Promise<
             if (onStream) {
                 const streamResult = await chat.sendMessageStream({ message: message || " " });
                 let fullText = '';
+                let capturedFunctionCalls: any[] | undefined = undefined;
+
                 for await (const chunk of streamResult) {
                     const chunkText = chunk.text || ''; 
                     fullText += chunkText;
                     onStream(chunkText);
+                    
+                    // Capture function calls from any chunk that has them
+                    if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+                        capturedFunctionCalls = chunk.functionCalls;
+                    }
                 }
-                const finalResponse = await streamResult.response;
-                return { text: fullText, functionCalls: finalResponse.functionCalls };
+                
+                return { text: fullText, functionCalls: capturedFunctionCalls };
             } else {
                 const result = await chat.sendMessage({ message: message || " " });
                 return { text: result.text, functionCalls: result.functionCalls };

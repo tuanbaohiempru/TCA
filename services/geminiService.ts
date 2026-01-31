@@ -1,6 +1,7 @@
 import { httpsCallable, Functions } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
-// NOTE: We use '@google/genai' (New SDK) for Gemini 1.5/2.0 features.
+// IMPORTANT: Use '@google/genai' (New SDK) for Gemini 1.5/2.0 models.
+// Do NOT use '@google/generative-ai' (Old SDK).
 import { GoogleGenAI } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus } from "../types";
 import { HTVK_BENEFITS } from "../data/pruHanhTrangVuiKhoe";
@@ -13,7 +14,7 @@ const getApiKey = (): string => {
 
 const apiKey = getApiKey();
 // Client-side instance is ONLY created if user manually injected key in localStorage
-// FIX: Constructor must use object with named parameter `apiKey`
+// NEW SDK SYNTAX: new GoogleGenAI({ apiKey: ... })
 const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const DEFAULT_MODEL = 'gemini-3-pro-preview'; 
@@ -41,7 +42,6 @@ QUY TẮC TRẢ LỜI:
  */
 const callAI = async (payload: any): Promise<any> => {
     // 1. Priority: Server-side (Secure Gateway)
-    // Check live readiness here
     if (isFirebaseReady && functions) {
         try {
             const gateway = httpsCallable(functions as Functions, 'geminiGateway', { timeout: 300000 });
@@ -65,16 +65,17 @@ const callAI = async (payload: any): Promise<any> => {
         const finalConfig = { ...config, systemInstruction, tools };
 
         if (endpoint === 'chat') {
-            // FIX: New SDK Syntax for Chat
+            // NEW SDK SYNTAX: chats.create
             const chat = clientAI.chats.create({ 
                 model: modelId, 
                 config: finalConfig, 
                 history: history || [] 
             });
+            // NEW SDK SYNTAX: sendMessage({ message: ... })
             const result = await chat.sendMessage({ message: message || " " });
             return { text: result.text, functionCalls: result.functionCalls };
         } else {
-            // FIX: New SDK Syntax for Generate Content
+            // NEW SDK SYNTAX: models.generateContent
             const result = await clientAI.models.generateContent({ 
                 model: modelId, 
                 contents: contents, 
@@ -206,9 +207,7 @@ export const chatWithData = async (
     }
 
     // FIX: Clean history to ensure it starts with 'user' role
-    // Filter out initial 'model' messages (like welcome messages)
     const validHistory = history.filter((msg, index) => {
-        // If it's the very first message in history and it's from 'model', skip it
         if (index === 0 && msg.role === 'model') return false;
         return true;
     }).map(m => ({
@@ -220,7 +219,7 @@ export const chatWithData = async (
         endpoint: 'chat',
         model: DEFAULT_MODEL,
         message: messageContent,
-        history: validHistory, // Use cleaned history
+        history: validHistory,
         systemInstruction: SUSAM_SYSTEM_INSTRUCTION + `\n\n${fullContext}`,
         config: {
             temperature: 0.2,
@@ -247,7 +246,7 @@ export const chatWithData = async (
     return { text: rawText };
 };
 
-// ... KEEP EXISTING EXPORTS AS WRAPPERS ...
+// ... KEEP EXISTING EXPORTS ...
 export const generateActionScript = async (task: any, customer: Customer | null): Promise<any> => {
     const prompt = `Soạn kịch bản ${task.category} cho khách hàng ${customer?.fullName}. Lý do: ${task.why}`;
     const res = await callAI({

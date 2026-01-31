@@ -18,8 +18,9 @@ const apiKey = getApiKey();
 // NEW SDK SYNTAX: new GoogleGenAI({ apiKey: ... })
 const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const DEFAULT_MODEL = 'gemini-3-pro-preview'; 
-const FLASH_MODEL = 'gemini-3-flash-preview'; 
+// OPTIMIZATION: Use Flash model for faster response (1-2s) instead of Pro (10s+)
+const DEFAULT_MODEL = 'gemini-3-flash-preview'; 
+const REASONING_MODEL = 'gemini-3-pro-preview'; 
 
 // --- SU SAM SQUAD SYSTEM PROMPT ---
 const SUSAM_SYSTEM_INSTRUCTION = `
@@ -28,7 +29,9 @@ Bạn có khả năng "nhìn" (qua ảnh), "nghe" (qua giọng nói) và thực 
 
 NHIỆM VỤ CỦA BẠN:
 1. **Xử lý thông tin**: Hiểu yêu cầu người dùng.
-2. **Retrieval (Tra cứu)**: Nếu người dùng hỏi về một khách hàng cụ thể, hệ thống sẽ cung cấp dữ liệu của khách hàng đó. Hãy dùng dữ liệu đó để trả lời.
+2. **Retrieval (Tra cứu)**: 
+   - Nếu hỏi về KHÁCH HÀNG: Tra cứu thông tin cá nhân, hợp đồng.
+   - Nếu hỏi về SẢN PHẨM/ĐIỀU KHOẢN: Tra cứu trong tài liệu quy tắc sản phẩm (nếu có).
 3. **Thực thi (Action)**: Khi đã đủ thông tin, hãy trả về JSON đặc biệt để App thực thi lệnh (Ví dụ: tạo khách hàng, đặt lịch).
 4. **Tư vấn Quyền lợi**: Sử dụng thông tin chi tiết về sản phẩm (nếu có trong context) để trả lời chính xác số tiền/quyền lợi.
 
@@ -37,7 +40,11 @@ QUY TẮC XỬ LÝ ẢNH CCCD/CMND:
 - **Số điện thoại KHÔNG BẮT BUỘC**: Trên CCCD không có số điện thoại. Hãy cứ tạo lệnh 'CREATE_CUSTOMER' với trường "phone": "" (chuỗi rỗng). Đừng dừng lại để hỏi số điện thoại trừ khi người dùng yêu cầu cụ thể.
 - Nếu là trẻ em (Dưới 18 tuổi tính theo năm sinh), mặc định gán nghề nghiệp là "Học sinh/Trẻ em".
 
-QUY TẮC TRẢ LỜI:
+QUY TẮC TRẢ LỜI CÂU HỎI SẢN PHẨM (QUAN TRỌNG):
+- Nếu hệ thống cung cấp nội dung "extractedContent" từ PDF: Hãy trả lời dựa trên nội dung đó và trích dẫn (Ví dụ: Theo trang 5...).
+- Nếu hệ thống báo "Chưa có dữ liệu văn bản": Hãy trả lời thật thà là "Sản phẩm này chưa được tải tài liệu quy tắc lên hệ thống. Anh/chị vui lòng vào mục Sản phẩm để upload file PDF nhé.". Đừng tự bịa ra điều khoản chi tiết.
+
+QUY TẮC TRẢ LỜI CHUNG:
 - Trả lời ngắn gọn, thân thiện, xưng "em", gọi "anh/chị".
 - Dùng Markdown để định dạng đẹp (Bold, List).
 - Nếu cần thực hiện hành động, hãy trả về JSON action ở cuối câu trả lời.
@@ -97,22 +104,27 @@ const callAI = async (payload: any): Promise<any> => {
 };
 
 /**
- * Helper: Extract Search Intent
+ * Helper: Extract Search Intent (Upgraded for Product support)
  */
-const detectSearchIntent = async (query: string): Promise<{ needsSearch: boolean; customerName?: string }> => {
+const detectSearchIntent = async (query: string): Promise<{ type: 'CUSTOMER' | 'PRODUCT' | 'GENERAL'; entityName?: string }> => {
     try {
         const prompt = `
         Analyze this query: "${query}"
-        Does the user refer to a specific person/customer name?
-        Return JSON only: { "needsSearch": boolean, "customerName": string | null }
-        Example: "Chị Thanh quyền lợi thế nào?" -> {"needsSearch": true, "customerName": "Thanh"}
-        Example: "Viết bài về ung thư" -> {"needsSearch": false, "customerName": null}
+        Classify the intent into one of these types:
+        1. CUSTOMER: Asking about a person (e.g., "Chị Thanh", "Hợp đồng của Hùng", "Tìm khách hàng tên A").
+        2. PRODUCT: Asking about insurance product terms, benefits, or exclusions (e.g., "Điều khoản Đầu tư linh hoạt", "Quyền lợi thẻ sức khỏe", "Loại trừ của CSBA").
+        3. GENERAL: General chat, greeting, or unclear.
+
+        Return JSON only: { "type": "CUSTOMER" | "PRODUCT" | "GENERAL", "entityName": string | null }
+        Example 1: "Chị Thanh quyền lợi thế nào?" -> {"type": "CUSTOMER", "entityName": "Thanh"}
+        Example 2: "Điều khoản loại trừ của Đầu Tư Linh Hoạt" -> {"type": "PRODUCT", "entityName": "Đầu Tư Linh Hoạt"}
+        Example 3: "Viết bài về ung thư" -> {"type": "GENERAL", "entityName": null}
         `;
         
         // Use callAI wrapper
         const res = await callAI({
             endpoint: 'generateContent',
-            model: FLASH_MODEL,
+            model: DEFAULT_MODEL, // Use Flash for speed
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -120,7 +132,7 @@ const detectSearchIntent = async (query: string): Promise<{ needsSearch: boolean
         return JSON.parse(res.text || '{}');
     } catch (e) {
         console.error("Intent Detection Failed", e);
-        return { needsSearch: false };
+        return { type: 'GENERAL' };
     }
 };
 
@@ -139,24 +151,24 @@ export const chatWithData = async (
     
     if (query && !imageBase64) {
         const intent = await detectSearchIntent(query);
-        
-        if (intent.needsSearch && intent.customerName) {
-            console.log(`[RAG] Searching for: ${intent.customerName}`);
-            
-            // 2. RAG: RETRIEVAL (Server-side Search)
-            const matchedCustomers = await searchCustomersByName(intent.customerName);
+        console.log(`[RAG] Intent: ${intent.type} - Entity: ${intent.entityName}`);
+
+        // --- CASE A: CUSTOMER SEARCH ---
+        if (intent.type === 'CUSTOMER' && intent.entityName) {
+            // 2A. RAG: RETRIEVAL (Server-side Search)
+            const matchedCustomers = await searchCustomersByName(intent.entityName);
             
             if (matchedCustomers.length === 0) {
-                ragContext = `[HỆ THỐNG]: Không tìm thấy khách hàng nào tên là "${intent.customerName}". Hãy báo lại cho người dùng.`;
+                ragContext = `[HỆ THỐNG]: Không tìm thấy khách hàng nào tên là "${intent.entityName}". Hãy báo lại cho người dùng.`;
             } else if (matchedCustomers.length > 3) {
-                ragContext = `[HỆ THỐNG]: Tìm thấy quá nhiều người tên "${intent.customerName}" (${matchedCustomers.length} người). Hãy yêu cầu người dùng cung cấp thêm họ tên đầy đủ.`;
+                ragContext = `[HỆ THỐNG]: Tìm thấy quá nhiều người tên "${intent.entityName}" (${matchedCustomers.length} người). Hãy yêu cầu người dùng cung cấp thêm họ tên đầy đủ.`;
             } else {
-                // 3. RAG: CONTEXT BUILDING
-                ragContext = `KẾT QUẢ TRA CỨU DỮ LIỆU (${matchedCustomers.length} khách hàng): \n`;
+                // 3A. RAG: CONTEXT BUILDING
+                ragContext = `KẾT QUẢ TRA CỨU KHÁCH HÀNG (${matchedCustomers.length} người): \n`;
                 
                 for (const cus of matchedCustomers) {
                     let contracts = await getContractsByCustomerId(cus.id);
-                    // Fallback for Demo environment (if DB is empty but State has data)
+                    // Fallback for Demo environment
                     if (contracts.length === 0 && appState.contracts.length > 0) {
                         contracts = appState.contracts.filter(c => c.customerId === cus.id);
                     }
@@ -169,29 +181,51 @@ export const chatWithData = async (
                     } else {
                         contracts.forEach(ct => {
                             ragContext += `HĐ số ${ct.contractNumber} (${ct.mainProduct.productName}) - Trạng thái: ${ct.status}\n`;
-                            
                             if (ct.riders && ct.riders.length > 0) {
-                                ragContext += `  Sản phẩm bổ trợ:\n`;
-                                ct.riders.forEach(r => {
-                                    ragContext += `  + ${r.productName}`;
-                                    if (r.productName.includes("Chăm sóc Sức khỏe") && r.attributes?.plan) {
-                                        const plan = r.attributes.plan;
-                                        const benefit = HTVK_BENEFITS[plan as keyof typeof HTVK_BENEFITS];
-                                        if (benefit) {
-                                            ragContext += ` (Gói ${plan})\n`;
-                                            ragContext += `    -> QUYỀN LỢI CHI TIẾT:\n`;
-                                            ragContext += `    - Tiền giường: ${benefit.noi_tru.tien_giuong}\n`;
-                                            ragContext += `    - Phẫu thuật: ${benefit.noi_tru.phau_thuat}\n`;
-                                            ragContext += `    - Hạn mức năm: ${benefit.gioi_han_nam}\n`;
-                                        }
-                                    } else {
-                                        ragContext += `\n`;
-                                    }
-                                });
+                                ragContext += `  Sản phẩm bổ trợ: ${ct.riders.map(r => r.productName).join(', ')}\n`;
                             }
                         });
                     }
                 }
+            }
+        }
+        // --- CASE B: PRODUCT SEARCH (KNOWLEDGE BASE) ---
+        else if (intent.type === 'PRODUCT' && intent.entityName) {
+            const searchKey = intent.entityName.toLowerCase();
+            const products = appState.products || [];
+            
+            // Simple fuzzy match
+            const matchedProduct = products.find(p => 
+                p.name.toLowerCase().includes(searchKey) || 
+                p.code.toLowerCase().includes(searchKey)
+            );
+
+            if (matchedProduct) {
+                if (matchedProduct.extractedContent && matchedProduct.extractedContent.length > 50) {
+                    // Truncate if too long (max ~20k chars for Flash model context safety, though Pro handles more)
+                    const contentSnippet = matchedProduct.extractedContent.substring(0, 30000); 
+                    ragContext = `
+                    [TÀI LIỆU SẢN PHẨM: ${matchedProduct.name}]
+                    Dưới đây là nội dung trích xuất từ file PDF quy tắc sản phẩm. Hãy dùng thông tin này để trả lời câu hỏi về điều khoản/loại trừ/quyền lợi.
+                    
+                    --- BẮT ĐẦU TÀI LIỆU ---
+                    ${contentSnippet}
+                    --- KẾT THÚC TÀI LIỆU ---
+                    `;
+                } else {
+                    ragContext = `
+                    [HỆ THỐNG CẢNH BÁO QUAN TRỌNG]:
+                    Người dùng đang hỏi về sản phẩm "${matchedProduct.name}".
+                    Tuy nhiên, hệ thống kiểm tra thấy trường "extractedContent" của sản phẩm này ĐANG RỖNG hoặc KHÔNG TỒN TẠI.
+                    
+                    NHIỆM VỤ CỦA BẠN:
+                    1. Thông báo rõ ràng cho người dùng: "Hiện tại dữ liệu văn bản chi tiết (quy tắc sản phẩm) của ${matchedProduct.name} chưa được tải lên hệ thống."
+                    2. Hướng dẫn hành động: "Anh/chị vui lòng vào menu Sản phẩm, chọn sản phẩm này và bấm nút Upload PDF để em học bài nhé."
+                    3. KHÔNG ĐƯỢC tự bịa ra điều khoản.
+                    `;
+                }
+            } else {
+                ragContext = `[HỆ THỐNG]: Không tìm thấy sản phẩm nào trong danh mục có tên giống "${intent.entityName}".`;
             }
         }
     }
@@ -202,7 +236,8 @@ export const chatWithData = async (
     - TVV: ${appState.agentProfile?.fullName || 'Tư vấn viên'}
     - Ngày hiện tại: ${new Date().toLocaleDateString('vi-VN')}
     
-    ${ragContext ? ragContext : "(Không có dữ liệu tra cứu cụ thể, hãy trả lời dựa trên kiến thức chung)"}
+    CONTEXT BỔ SUNG TỪ DATABASE:
+    ${ragContext ? ragContext : "(Không có dữ liệu tra cứu cụ thể)"}
     `;
 
     let messageContent: any = query;
@@ -224,7 +259,7 @@ export const chatWithData = async (
 
     const payload = {
         endpoint: 'chat',
-        model: DEFAULT_MODEL,
+        model: DEFAULT_MODEL, // Using Flash for faster chat
         message: messageContent,
         history: validHistory,
         systemInstruction: SUSAM_SYSTEM_INSTRUCTION + `\n\n${fullContext}`,
@@ -239,19 +274,16 @@ export const chatWithData = async (
     let extractedAction = null;
 
     // --- JSON BLOCK EXTRACTION & CLEANUP ---
-    // Look for ```json ... ``` blocks OR raw JSON objects at the end of the string
+    // Sometimes model outputs ```json ... ```, sometimes just json, sometimes text then json.
     const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```|(\{(?:[^{}]|\{(?:[^{}]|1)*\})*\})\s*$/;
-    
     const match = rawText.match(jsonBlockRegex);
     if (match) {
-        const jsonString = match[1] || match[2]; // match[1] is markdown content, match[2] is raw json
+        const jsonString = match[1] || match[2]; 
         try {
             const parsed = JSON.parse(jsonString);
-            
-            // Heuristic check: is it an Action object? (contains 'action' or 'type')
             if (parsed.action || parsed.type) {
                 extractedAction = parsed;
-                // Remove the JSON block from the text shown to the user
+                // Remove the JSON block from text to show a clean message
                 rawText = rawText.replace(match[0], '').trim();
             }
         } catch (e) {
@@ -295,7 +327,7 @@ export const extractIdentityCard = async (base64Image: string) => {
         const prompt = `Trích xuất thông tin từ ảnh CMND/CCCD này. Trả về JSON: { "fullName": "", "idCard": "", "dob": "YYYY-MM-DD", "gender": "Nam/Nữ", "companyAddress": "" }`;
         const res = await callAI({
             endpoint: 'generateContent',
-            model: FLASH_MODEL,
+            model: DEFAULT_MODEL, // Flash is great for OCR
             contents: [
                 { text: prompt },
                 { inlineData: { mimeType: 'image/jpeg', data: base64Image } }

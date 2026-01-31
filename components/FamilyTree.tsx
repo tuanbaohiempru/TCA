@@ -1,6 +1,6 @@
 
 import React, { useMemo, useCallback } from 'react';
-// Default import for the component
+// Combine imports and use inline 'type' for interfaces
 import ReactFlow, {
   Background,
   Controls,
@@ -8,10 +8,10 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   MarkerType,
-  Handle
+  Handle,
+  type Edge,
+  type Node
 } from 'reactflow';
-// Explicit type imports
-import type { Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { Customer, RelationshipType, CustomerStatus, Contract, ContractStatus } from '../types';
@@ -26,7 +26,6 @@ interface FamilyTreeProps {
 // --- CUSTOM NODE COMPONENT ---
 const FamilyNode = ({ data }: { data: any }) => {
   const isCenter = data.isCenter;
-  const isSigned = data.status === CustomerStatus.SIGNED;
   const hasActiveContract = data.hasActiveContract;
 
   return (

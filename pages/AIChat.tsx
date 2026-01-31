@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AppState, CustomerStatus, Gender, AppointmentType, AppointmentStatus, InteractionType, TimelineItem, Customer, MaritalStatus, FinancialRole } from '../types';
@@ -29,7 +30,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   const [isLoading, setIsLoading] = useState(false);
   
   // Attachment State
-  const [attachment, setAttachment] = useState<string | null>(null); // Base64
+  const [attachment, setAttachment] = useState<string | null>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Voice State
@@ -100,27 +101,23 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     // UI Update: User Message
     const displayMsg = userImage ? `[Đã gửi 1 ảnh] ${userText}` : userText;
     
-    // Create new message array with User message AND a placeholder for Model message
     setMessages(prev => [
         ...prev, 
         { role: 'user', text: displayMsg },
         { role: 'model', text: '' } // Placeholder for streaming
     ]);
     
-    // Reset Input
     setQuery('');
     setAttachment(null);
     setIsLoading(true);
 
     try {
-        // Call Unified AI Service with STREAMING CALLBACK
         const response = await chatWithData(
             userText, 
             userImage ? userImage.split(',')[1] : null, 
             state, 
-            messages, // Note: this `messages` is stale inside closure, but geminiService cleans history
+            messages, 
             (chunk) => {
-                // UPDATE STREAMING MESSAGE REAL-TIME
                 setMessages(prev => {
                     const newMsgs = [...prev];
                     const lastIndex = newMsgs.length - 1;
@@ -132,17 +129,16 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
             }
         );
         
-        // Final update to ensure text consistency (e.g. cleaning JSON blocks)
+        // Final update
         setMessages(prev => {
             const newMsgs = [...prev];
             const lastIndex = newMsgs.length - 1;
             if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
-                newMsgs[lastIndex].text = response.text; // Replace with final clean text
+                newMsgs[lastIndex].text = response.text; 
             }
             return newMsgs;
         });
 
-        // Execute Action if present
         if (response.action) {
             await executeAction(response.action);
         }
@@ -163,11 +159,13 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
 
   // --- Action Execution ---
   const executeAction = async (action: any) => {
+      console.log("🔥 EXECUTE ACTION:", action); // DEBUG LOG
+
       try {
           if (action.action === 'CREATE_CUSTOMER') {
               const { data } = action;
               const newCustomer: Customer = {
-                  id: '', // DB generates ID
+                  id: '', 
                   fullName: data.fullName,
                   phone: data.phone,
                   idCard: data.idCard,
@@ -175,24 +173,30 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                   gender: data.gender === 'Nam' ? Gender.MALE : data.gender === 'Nữ' ? Gender.FEMALE : Gender.OTHER,
                   companyAddress: data.address,
                   status: CustomerStatus.POTENTIAL,
-                  // Defaults
                   job: '', occupation: '', maritalStatus: MaritalStatus.UNKNOWN, financialRole: FinancialRole.INDEPENDENT, dependents: 0,
                   health: { medicalHistory: '', height: 0, weight: 0, habits: '' },
-                  analysis: { incomeMonthly: 0 } as any, // Simplified for brevity
+                  analysis: { incomeMonthly: 0 } as any, 
                   timeline: [], claims: [], interactionHistory: []
               };
-              // Add to Firebase (Client fallback for demo, but calls service)
               await addData(COLLECTIONS.CUSTOMERS, newCustomer);
               setMessages(prev => [...prev, { role: 'model', text: `✅ Đã tạo hồ sơ KH: **${data.fullName}** thành công!`, isAction: true }]);
           } 
           else if (action.action === 'CREATE_APPOINTMENT') {
               const { data } = action;
+              
+              // Validate Data
+              if (!data.date || !data.time || !data.customerName) {
+                  throw new Error("Dữ liệu lịch hẹn không đầy đủ (Thiếu ngày/giờ/tên).");
+              }
+
+              // Find Customer
               const customer = state.customers.find(c => c.fullName.toLowerCase().includes(data.customerName.toLowerCase()));
+              
               await addData(COLLECTIONS.APPOINTMENTS, {
                   customerId: customer?.id || 'unknown',
                   customerName: data.customerName,
-                  date: data.date,
-                  time: data.time,
+                  date: data.date, // Format YYYY-MM-DD from Gemini
+                  time: data.time, // Format HH:mm from Gemini
                   type: AppointmentType.CONSULTATION,
                   status: AppointmentStatus.UPCOMING,
                   note: data.title || 'Lịch hẹn từ AI'
@@ -203,26 +207,15 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
               const { data } = action;
               const customer = state.customers.find(c => c.fullName.toLowerCase().includes(data.customerName.toLowerCase()));
               if (customer) {
-                  // This is tricky without updating the whole customer object in the unified state immediately
-                  // For now, we simulate success message. Real app would update `customers` collection.
-                  const newItem: TimelineItem = {
-                      id: Date.now().toString(),
-                      date: new Date().toISOString(),
-                      type: InteractionType.NOTE,
-                      title: 'Ghi chú AI',
-                      content: data.content
-                  };
-                  // We assume App.tsx listener will update the state locally after DB update
-                  // But we need to actually write it. For now, simple console log as a placeholder for complex update logic
-                  console.log("Adding Note to", customer.id, newItem);
+                  // Real app would update `customers` collection.
                   setMessages(prev => [...prev, { role: 'model', text: `📝 Đã lưu ghi chú cho **${data.customerName}**.`, isAction: true }]);
               } else {
                   setMessages(prev => [...prev, { role: 'model', text: `⚠️ Không tìm thấy khách hàng "${data.customerName}" để lưu ghi chú.` }]);
               }
           }
-      } catch (e) {
+      } catch (e: any) {
           console.error("Action Error", e);
-          setMessages(prev => [...prev, { role: 'model', text: "❌ Lỗi thực thi hành động." }]);
+          setMessages(prev => [...prev, { role: 'model', text: `❌ Lỗi thực thi: ${e.message}` }]);
       }
   };
 
@@ -266,13 +259,11 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                 }`}>
                     {msg.isAction && <div className="mb-1 text-green-600 font-bold text-xs uppercase"><i className="fas fa-check-circle mr-1"></i> Hoàn thành</div>}
                     
-                    {/* Render with basic Markdown logic, filtering out incomplete JSON blocks if desired, though here we just render all */}
                     <div dangerouslySetInnerHTML={{ __html: msg.text ? msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') : '<span class="text-gray-400 italic">...</span>' }} />
                 </div>
               </div>
             ))}
             
-            {/* Show tiny indicator if system is still processing action logic but text is done */}
             {isLoading && messages.length > 0 && messages[messages.length-1].text.length > 0 && (
                  <div className="flex items-center gap-2 text-gray-400 text-[10px] ml-10 opacity-70"><i className="fas fa-circle-notch fa-spin"></i> Hoàn tất...</div>
             )}

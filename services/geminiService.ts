@@ -155,8 +155,9 @@ export const extractPdfText = async (fileUrl: string) => {
 export const extractIdentityCard = async (base64Image: string) => {
     if (!clientAI) return null; // Vision require client key or complex server setup
     try {
-        const model = clientAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-        const result = await model.generateContent({
+        // FIXED: Use clientAI.models.generateContent instead of getGenerativeModel (New SDK Syntax)
+        const response = await clientAI.models.generateContent({
+            model: 'gemini-3-flash-preview',
             contents: [
                 { role: 'user', parts: [
                     { text: "Trích xuất thông tin từ thẻ CCCD này. Trả về JSON: {idCard, fullName, dob (YYYY-MM-DD), gender, companyAddress}" },
@@ -164,7 +165,10 @@ export const extractIdentityCard = async (base64Image: string) => {
                 ]}
             ]
         });
-        const text = result.response.text();
+        
+        const text = response.text;
+        if (!text) return null;
+
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
     } catch (e) {

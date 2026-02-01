@@ -12,16 +12,19 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
     { path: '/', label: 'Home', icon: 'fa-home' },
     { path: '/customers', label: 'Khách', icon: 'fa-users' },
-    { path: '/appointments', label: 'Lịch', icon: 'fa-calendar-alt' },
+    { path: '/tools', label: 'Công cụ', icon: 'fa-th-large' }, // New Hub
     { path: '/settings', label: 'Cài đặt', icon: 'fa-cog' }, 
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+      if (path === '/' && location.pathname !== '/') return false;
+      return location.pathname.startsWith(path);
+  };
+  
   const pageTitle = navItems.find(item => item.path === location.pathname)?.label || 'Chi tiết';
 
   const handleLogout = async () => {
@@ -36,7 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
       {/* 1. DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-pru-card border-r border-gray-200 dark:border-gray-800 z-30 transition-colors">
         <div className="flex items-center justify-center h-16 border-b border-gray-200 dark:border-gray-800 bg-pru-red text-white">
-          <span className="text-xl font-bold tracking-wider">TuanChom</span>
+          <span className="text-xl font-bold tracking-wider italic">TuanChom <span className="text-[10px] font-normal not-italic opacity-80">MDRT</span></span>
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-2">
@@ -56,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
               </li>
             ))}
              <li>
-                <Link to="/contracts" className={`flex items-center px-4 py-3 rounded-lg transition-colors ${isActive('/contracts') ? 'text-pru-red bg-red-50' : 'text-gray-600 hover:bg-gray-100'}`}>
+                <Link to="/contracts" className={`flex items-center px-4 py-3 rounded-lg transition-colors ${isActive('/contracts') ? 'text-pru-red bg-red-50 dark:bg-red-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                     <i className="fas fa-file-contract w-6 text-center mr-3"></i> Hợp đồng
                 </Link>
              </li>
@@ -98,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 className="w-10 h-10 md:w-auto md:px-4 md:py-2 rounded-full bg-red-600 text-white flex items-center justify-center gap-2 hover:bg-red-700 transition group shadow-lg shadow-red-500/30 animate-pulse"
              >
                 <i className="fas fa-robot text-lg md:text-base"></i>
-                <span className="hidden md:inline text-sm font-bold">Trợ lý TuanChom</span>
+                <span className="hidden md:inline text-sm font-bold">Trợ lý AI</span>
              </button>
           </div>
         </header>

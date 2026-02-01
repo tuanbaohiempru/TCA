@@ -15,6 +15,11 @@ import SettingsPage from './pages/Settings';
 import AdvisoryPage from './pages/Advisory';
 import ProductAdvisoryPage from './pages/ProductAdvisory';
 import LoginPage from './pages/Login';
+import ToolsPage from './pages/Tools';
+import FinancialPlanning from './pages/FinancialPlanning';
+import OperationsPage from './pages/Operations';
+import MarketingPage from './pages/Marketing';
+import BusinessCard from './pages/BusinessCard';
 
 import { AppState, Customer, Contract, Product, Appointment, AgentProfile, Illustration } from './types';
 import { subscribeToCollection, addData, updateData, deleteData, COLLECTIONS } from './services/db';
@@ -45,7 +50,7 @@ const App: React.FC = () => {
                 contracts: INITIAL_CONTRACTS,
                 products: INITIAL_PRODUCTS,
                 appointments: INITIAL_APPOINTMENTS,
-                agentProfile: { id: 'demo-profile', fullName: 'Demo Agent', age: 28, address: 'Hà Nội', phone: '0987654321', email: 'demo@tuanchom.com', office: 'Prudential Demo Office', agentCode: '60012345', title: 'MDRT 2024', bio: 'Chuyên gia tư vấn tài chính.', targets: { weekly: 0, monthly: 0, quarterly: 0, yearly: 0 } },
+                agentProfile: { id: 'demo-profile', fullName: 'Demo Agent', age: 28, address: 'Hà Nội', phone: '0987654321', email: 'demo@tuanchom.com', office: 'Prudential Plaza', agentCode: '60012345', title: 'MDRT 2024', bio: 'Chuyên gia tư vấn tài chính tận tâm.', targets: { weekly: 0, monthly: 0, quarterly: 0, yearly: 0 } },
                 messageTemplates: [],
                 illustrations: []
             });
@@ -81,44 +86,21 @@ const App: React.FC = () => {
 
     const isDemo = !isFirebaseReady;
 
-    // --- CRUD FUNCTIONS ---
-    const addAppointment = async (a: Appointment) => { 
-        if(isDemo) { setState(prev => ({...prev, appointments: [...prev.appointments, a]})); return; } 
-        await addData(COLLECTIONS.APPOINTMENTS, a); 
-    };
-
-    const updateAppointment = async (a: Appointment) => { 
-        if(isDemo) { setState(prev => ({...prev, appointments: prev.appointments.map(x => x.id === a.id ? a : x)})); return; } 
-        await updateData(COLLECTIONS.APPOINTMENTS, a.id, a); 
-    };
-
-    const addCustomer = async (c: Customer) => { 
-        if(isDemo) { setState(prev => ({...prev, customers: [c, ...prev.customers]})); return; } 
-        await addData(COLLECTIONS.CUSTOMERS, c); 
-    };
-
+    const addAppointment = async (a: Appointment) => { if(isDemo) { setState(prev => ({...prev, appointments: [...prev.appointments, a]})); return; } await addData(COLLECTIONS.APPOINTMENTS, a); };
+    const updateAppointment = async (a: Appointment) => { if(isDemo) { setState(prev => ({...prev, appointments: prev.appointments.map(x => x.id === a.id ? a : x)})); return; } await updateData(COLLECTIONS.APPOINTMENTS, a.id, a); };
+    const addCustomer = async (c: Customer) => { if(isDemo) { setState(prev => ({...prev, customers: [c, ...prev.customers]})); return; } await addData(COLLECTIONS.CUSTOMERS, c); };
     const updateCustomer = async (newCustomer: Customer) => {
         const oldCustomer = state.customers.find(c => c.id === newCustomer.id);
         const { appointmentsToUpdate, appointmentsToAdd, newTimelineItems } = runCustomerAutomations(oldCustomer, newCustomer, state.appointments);
         const customerToSave = { ...newCustomer, timeline: [...newTimelineItems, ...(newCustomer.timeline || [])] };
-
-        if (isDemo) {
-            setState(prev => ({ ...prev, customers: prev.customers.map(item => item.id === newCustomer.id ? customerToSave : item) }));
-        } else {
-            await updateData(COLLECTIONS.CUSTOMERS, newCustomer.id, customerToSave);
-        }
-
+        if (isDemo) { setState(prev => ({ ...prev, customers: prev.customers.map(item => item.id === newCustomer.id ? customerToSave : item) })); } else { await updateData(COLLECTIONS.CUSTOMERS, newCustomer.id, customerToSave); }
         for (const app of appointmentsToAdd) await addAppointment(app);
         for (const app of appointmentsToUpdate) await updateAppointment(app);
     };
-
     const deleteCustomer = async (id: string) => { if(isDemo) { setState(prev => ({...prev, customers: prev.customers.filter(item => item.id !== id)})); return; } await deleteData(COLLECTIONS.CUSTOMERS, id); };
-
     const updateContract = async (c: Contract) => { if(isDemo) { setState(prev => ({...prev, contracts: prev.contracts.map(item => item.id === c.id ? c : item)})); return; } await updateData(COLLECTIONS.CONTRACTS, c.id, c); };
     const deleteAppointment = async (id: string) => { if(isDemo) { setState(prev => ({...prev, appointments: prev.appointments.filter(item => item.id !== id)})); return; } await deleteData(COLLECTIONS.APPOINTMENTS, id); };
     const saveIllustration = async (ill: Illustration) => { if(isDemo) { setState(prev => ({...prev, illustrations: [ill, ...prev.illustrations]})); return; } await addData(COLLECTIONS.ILLUSTRATIONS, ill); };
-
-    // Product CRUD (Lifted for Settings Page)
     const addProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: [...prev.products, p]})); return; } await addData(COLLECTIONS.PRODUCTS, p); };
     const updateProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.map(x => x.id === p.id ? p : x)})); return; } await updateData(COLLECTIONS.PRODUCTS, p.id, p); };
     const deleteProduct = async (id: string) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.filter(x => x.id !== id)})); return; } await deleteData(COLLECTIONS.PRODUCTS, id); };
@@ -128,68 +110,25 @@ const App: React.FC = () => {
     return (
         <Router>
             <Routes>
-                {!user ? (
-                    <Route path="*" element={<LoginPage />} />
-                ) : (
+                {!user ? ( <Route path="*" element={<LoginPage />} /> ) : (
                     <>
-                        <Route path="/" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <Dashboard state={state} onUpdateContract={updateContract} onAddAppointment={addAppointment} onUpdateCustomer={updateCustomer} onUpdateAppointment={updateAppointment} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/customers" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/customers/:id" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/appointments" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/contracts" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <ContractsPage contracts={state.contracts} customers={state.customers} products={state.products} onAdd={async (c) => { if(isDemo) setState(prev => ({...prev, contracts: [c, ...prev.contracts]})); else await addData(COLLECTIONS.CONTRACTS, c); }} onUpdate={updateContract} onDelete={async (id) => {}} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/advisory/:id" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <AdvisoryPage customers={state.customers} contracts={state.contracts} agentProfile={state.agentProfile} onUpdateCustomer={updateCustomer} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/product-advisory" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <ProductAdvisoryPage customers={state.customers} products={state.products} onSaveIllustration={saveIllustration} />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
-                        <Route path="/settings" element={
-                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
-                                <SettingsPage 
-                                    profile={state.agentProfile} 
-                                    onSave={(p) => isDemo ? setState(prev => ({...prev, agentProfile: p})) : updateData(COLLECTIONS.SETTINGS, state.agentProfile?.id || '', p)} 
-                                    isDarkMode={isDarkMode} 
-                                    toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-                                    // Pass Product Props to Settings
-                                    products={state.products}
-                                    onAddProduct={addProduct}
-                                    onUpdateProduct={updateProduct}
-                                    onDeleteProduct={deleteProduct}
-                                />
-                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
-                            </Layout>
-                        } />
+                        <Route path="/" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <Dashboard state={state} onUpdateContract={updateContract} onAddAppointment={addAppointment} onUpdateCustomer={updateCustomer} onUpdateAppointment={updateAppointment} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/customers" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/customers/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/appointments" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/contracts" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ContractsPage contracts={state.contracts} customers={state.customers} products={state.products} onAdd={async (c) => { if(isDemo) setState(prev => ({...prev, contracts: [c, ...prev.contracts]})); else await addData(COLLECTIONS.CONTRACTS, c); }} onUpdate={updateContract} onDelete={async (id) => {}} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/advisory/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AdvisoryPage customers={state.customers} contracts={state.contracts} agentProfile={state.agentProfile} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/product-advisory" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ProductAdvisoryPage customers={state.customers} products={state.products} onSaveIllustration={saveIllustration} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
+                        {/* TOOLS ROUTES */}
+                        <Route path="/tools" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ToolsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/tools/finance" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <FinancialPlanning /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/tools/ops" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <OperationsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/tools/marketing" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <MarketingPage profile={state.agentProfile} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/tools/templates" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <MessageTemplatesPage templates={state.messageTemplates} customers={state.customers} contracts={state.contracts} onAdd={async (t) => await addData(COLLECTIONS.MESSAGE_TEMPLATES, t)} onUpdate={async (t) => await updateData(COLLECTIONS.MESSAGE_TEMPLATES, t.id, t)} onDelete={async (id) => await deleteData(COLLECTIONS.MESSAGE_TEMPLATES, id)} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/tools/card" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <BusinessCard profile={state.agentProfile} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
+                        <Route path="/settings" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <SettingsPage profile={state.agentProfile} onSave={(p) => isDemo ? setState(prev => ({...prev, agentProfile: p})) : updateData(COLLECTIONS.SETTINGS, state.agentProfile?.id || '', p)} isDarkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} products={state.products} onAddProduct={addProduct} onUpdateProduct={updateProduct} onDeleteProduct={deleteProduct} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 )}

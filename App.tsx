@@ -135,43 +135,43 @@ const App: React.FC = () => {
                         <Route path="/" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <Dashboard state={state} onUpdateContract={updateContract} onAddAppointment={addAppointment} onUpdateCustomer={updateCustomer} onUpdateAppointment={updateAppointment} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/customers" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/customers/:id" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/appointments" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/contracts" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <ContractsPage contracts={state.contracts} customers={state.customers} products={state.products} onAdd={async (c) => { if(isDemo) setState(prev => ({...prev, contracts: [c, ...prev.contracts]})); else await addData(COLLECTIONS.CONTRACTS, c); }} onUpdate={updateContract} onDelete={async (id) => {}} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/advisory/:id" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <AdvisoryPage customers={state.customers} contracts={state.contracts} agentProfile={state.agentProfile} onUpdateCustomer={updateCustomer} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/product-advisory" element={
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}>
                                 <ProductAdvisoryPage customers={state.customers} products={state.products} onSaveIllustration={saveIllustration} />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="/settings" element={
@@ -187,7 +187,7 @@ const App: React.FC = () => {
                                     onUpdateProduct={updateProduct}
                                     onDeleteProduct={deleteProduct}
                                 />
-                                <AIChat state={state} isOpen={isChatOpen} setIsOpen={setIsChatOpen} />
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />}
                             </Layout>
                         } />
                         <Route path="*" element={<Navigate to="/" replace />} />

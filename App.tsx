@@ -105,6 +105,26 @@ const App: React.FC = () => {
     const updateProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.map(x => x.id === p.id ? p : x)})); return; } await updateData(COLLECTIONS.PRODUCTS, p.id, p); };
     const deleteProduct = async (id: string) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.filter(x => x.id !== id)})); return; } await deleteData(COLLECTIONS.PRODUCTS, id); };
 
+    // --- FIX: SMART SAVE PROFILE HANDLER ---
+    const handleSaveProfile = async (p: AgentProfile) => {
+        if (isDemo) {
+            setState(prev => ({...prev, agentProfile: p}));
+            return;
+        }
+        
+        try {
+            // Check if profile exists (has ID) -> Update, else -> Create
+            if (state.agentProfile && state.agentProfile.id) {
+                await updateData(COLLECTIONS.SETTINGS, state.agentProfile.id, p);
+            } else {
+                await addData(COLLECTIONS.SETTINGS, p);
+            }
+        } catch (e) {
+            console.error("Save Profile Error", e);
+            throw e;
+        }
+    };
+
     if (authLoading) return <div className="h-screen w-screen flex items-center justify-center bg-gray-50"><div className="w-12 h-12 border-4 border-pru-red border-t-transparent rounded-full animate-spin"></div></div>;
 
     return (
@@ -123,12 +143,48 @@ const App: React.FC = () => {
                         {/* TOOLS ROUTES */}
                         <Route path="/tools" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ToolsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/tools/finance" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <FinancialPlanning /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
-                        <Route path="/tools/ops" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <OperationsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
-                        <Route path="/tools/marketing" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <MarketingPage profile={state.agentProfile} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
+                        {/* UPDATE: Pass Data to OperationsPage */}
+                        <Route path="/tools/ops" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <OperationsPage 
+                                    customers={state.customers} 
+                                    contracts={state.contracts} 
+                                    products={state.products} 
+                                /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
+                        
+                        <Route path="/tools/marketing" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <MarketingPage 
+                                    profile={state.agentProfile} 
+                                    customers={state.customers} 
+                                    contracts={state.contracts} 
+                                /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
+                        
                         <Route path="/tools/templates" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <MessageTemplatesPage templates={state.messageTemplates} customers={state.customers} contracts={state.contracts} onAdd={async (t) => await addData(COLLECTIONS.MESSAGE_TEMPLATES, t)} onUpdate={async (t) => await updateData(COLLECTIONS.MESSAGE_TEMPLATES, t.id, t)} onDelete={async (id) => await deleteData(COLLECTIONS.MESSAGE_TEMPLATES, id)} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/tools/card" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <BusinessCard profile={state.agentProfile} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
-                        <Route path="/settings" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <SettingsPage profile={state.agentProfile} onSave={(p) => isDemo ? setState(prev => ({...prev, agentProfile: p})) : updateData(COLLECTIONS.SETTINGS, state.agentProfile?.id || '', p)} isDarkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} products={state.products} onAddProduct={addProduct} onUpdateProduct={updateProduct} onDeleteProduct={deleteProduct} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/settings" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <SettingsPage 
+                                    profile={state.agentProfile} 
+                                    onSave={handleSaveProfile} 
+                                    isDarkMode={isDarkMode} 
+                                    toggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
+                                    products={state.products} 
+                                    onAddProduct={addProduct} 
+                                    onUpdateProduct={updateProduct} 
+                                    onDeleteProduct={deleteProduct} 
+                                /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                 )}

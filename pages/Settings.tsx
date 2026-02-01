@@ -8,7 +8,7 @@ import ProductsPage from './Products'; // Reuse the existing Product Manager
 
 interface SettingsPageProps {
     profile: AgentProfile | null;
-    onSave: (p: AgentProfile) => void;
+    onSave: (p: AgentProfile) => Promise<void>; // Updated to support async await
     isDarkMode?: boolean;
     toggleDarkMode?: () => void;
     // Product Management Props
@@ -40,6 +40,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         targets: { weekly: 0, monthly: 0, quarterly: 0, yearly: 0 }
     });
     const [isUploading, setIsUploading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (profile) {
@@ -51,9 +52,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         }
     }, [profile]);
 
-    const handleSubmit = () => {
-        onSave(formData);
-        alert("Đã lưu thông tin cài đặt!");
+    const handleSubmit = async () => {
+        setIsSaving(true);
+        try {
+            await onSave(formData);
+            alert("Đã lưu thông tin cài đặt thành công!");
+        } catch (error) {
+            console.error(error);
+            alert("Lỗi khi lưu thông tin. Vui lòng thử lại.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,8 +219,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                                 </div>
 
                                 <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                                    <button onClick={handleSubmit} className="bg-pru-red text-white px-6 py-2.5 rounded-lg hover:bg-red-700 transition shadow-md font-bold">
-                                        <i className="fas fa-save mr-2"></i>Lưu thay đổi
+                                    <button 
+                                        onClick={handleSubmit} 
+                                        disabled={isSaving}
+                                        className="bg-pru-red text-white px-6 py-2.5 rounded-lg hover:bg-red-700 transition shadow-md font-bold disabled:opacity-50 flex items-center"
+                                    >
+                                        {isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i> Đang lưu...</> : <><i className="fas fa-save mr-2"></i> Lưu thay đổi</>}
                                     </button>
                                 </div>
                             </div>

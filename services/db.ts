@@ -16,12 +16,17 @@ const COLLECTIONS = {
 // --- HELPER: SANITIZE DATA ---
 /**
  * Loại bỏ các trường undefined để tránh lỗi Firestore "Unsupported field value: undefined"
- * Chuyển đổi ID thành chuỗi nếu cần thiết
+ * Tự động thêm trường searchKey cho Customer để tối ưu tìm kiếm
  */
-const sanitizePayload = (data: any) => {
+const sanitizePayload = (data: any, collectionName: string) => {
     // Sử dụng JSON trick để loại bỏ nhanh các key có value là undefined
-    // JSON.stringify sẽ bỏ qua các field undefined
     const clean = JSON.parse(JSON.stringify(data));
+
+    // OPTIMIZATION: Tạo searchKey cho Customer để query chi phí thấp
+    if (collectionName === COLLECTIONS.CUSTOMERS && clean.fullName) {
+        clean.searchKey = clean.fullName.toLowerCase().trim();
+    }
+
     return clean;
 };
 
@@ -32,7 +37,10 @@ const sanitizePayload = (data: any) => {
  */
 export const subscribeToCollection = (collectionName: string, callback: (data: any[]) => void) => {
     if (!db) return () => {};
-    return db.collection(collectionName).onSnapshot((snapshot: any) => {
+    // Giới hạn 100 records mặc định để tránh load quá nhiều bill
+    const query = db.collection(collectionName).limit(100);
+    
+    return query.onSnapshot((snapshot: any) => {
         const data = snapshot.docs.map((doc: any) => ({
             ...doc.data(),
             id: doc.id 
@@ -51,7 +59,7 @@ export const addData = async (collectionName: string, data: any) => {
         if (!db) throw new Error("Firebase DB not initialized");
         // Tách ID ra (để Firestore tự sinh ID), và làm sạch dữ liệu
         const { id, ...rest } = data; 
-        const cleanData = sanitizePayload(rest);
+        const cleanData = sanitizePayload(rest, collectionName);
         
         await db.collection(collectionName).add(cleanData);
     } catch (e: any) {
@@ -68,7 +76,7 @@ export const updateData = async (collectionName: string, id: string, data: any) 
         if (!db) throw new Error("Firebase DB not initialized");
         // Tách ID cũ ra để không ghi đè vào field 'id' trong doc (nếu có)
         const { id: dataId, ...rest } = data;
-        const cleanData = sanitizePayload(rest);
+        const cleanData = sanitizePayload(rest, collectionName);
 
         await db.collection(collectionName).doc(id).update(cleanData);
     } catch (e: any) {
@@ -90,21 +98,27 @@ export const deleteData = async (collectionName: string, id: string) => {
     }
 };
 
-// --- RAG SPECIFIC FUNCTIONS (Server-side Retrieval) ---
+// --- OPTIMIZED SEARCH FUNCTIONS (COST SAVING) ---
 
 /**
- * Tìm kiếm khách hàng theo tên (Search Index logic giả lập)
- * Trong thực tế nên dùng Algolia/ElasticSearch, ở đây dùng Firestore query cơ bản
+ * Tìm kiếm khách hàng theo tên (Sử dụng index searchKey)
+ * Thay vì lấy toàn bộ database về lọc (tốn kém), ta dùng query Firestore.
  */
 export const searchCustomersByName = async (keyword: string): Promise<Customer[]> => {
     if (!keyword || !db) return [];
     
     try {
-        const snapshot = await db.collection(COLLECTIONS.CUSTOMERS).get();
-        const all = snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id })) as Customer[];
+        const searchKey = keyword.toLowerCase().trim();
         
-        const lowerKey = keyword.toLowerCase();
-        return all.filter(c => c.fullName.toLowerCase().includes(lowerKey));
+        // Sử dụng kỹ thuật Range Query cho chuỗi để tìm kiếm "Starts With"
+        // searchKey <= name <= searchKey + \uf8ff
+        const snapshot = await db.collection(COLLECTIONS.CUSTOMERS)
+            .where('searchKey', '>=', searchKey)
+            .where('searchKey', '<=', searchKey + '\uf8ff')
+            .limit(20) // Chỉ lấy tối đa 20 kết quả để tiết kiệm
+            .get();
+
+        return snapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id })) as Customer[];
     } catch (e) {
         console.error("Search Error", e);
         return [];

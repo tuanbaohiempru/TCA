@@ -6,33 +6,11 @@ require('dotenv').config();
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { GoogleGenAI } = require("@google/genai");
-const pdfParse = require('pdf-parse'); // Library to extract text from PDF
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 
-// Cấu hình Global cho V2: Timeout 300s (5 phút), RAM 512MB
-setGlobalOptions({ maxInstances: 10, timeoutSeconds: 300, memory: '512MiB' });
+// Cấu hình Global cho V2: Timeout 300s, RAM 256MB (Giảm RAM vì không còn xử lý PDF nặng)
+setGlobalOptions({ maxInstances: 10, timeoutSeconds: 60, memory: '256MiB' });
 
 const API_KEY = process.env.API_KEY;
-
-// Helper: Download file an toàn hơn sử dụng ArrayBuffer
-const downloadFile = async (url, outputPath) => {
-    try {
-        console.log(`[Download] Starting: ${url.substring(0, 50)}...`);
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        fs.writeFileSync(outputPath, buffer);
-        console.log(`[Download] Success: ${outputPath} (${buffer.length} bytes)`);
-    } catch (e) {
-        console.error(`[Download] Failed:`, e);
-        throw new Error(`Download failed: ${e.message}`);
-    }
-};
 
 exports.geminiGateway = onCall(async (request) => {
     const data = request.data; 
@@ -45,37 +23,12 @@ exports.geminiGateway = onCall(async (request) => {
         throw new HttpsError('invalid-argument', 'Request body is missing.');
     }
 
-    const { endpoint, model, contents, message, history, systemInstruction, config, url, tools } = data;
+    const { endpoint, model, contents, message, history, systemInstruction, config, tools } = data;
     const ai = new GoogleGenAI({ apiKey: API_KEY });
-    const DEFAULT_MODEL = 'gemini-3-flash-preview'; 
+    // Default model fallback if not provided
+    const targetModel = model || 'gemini-3-flash-preview';
 
-    // --- ENDPOINT: EXTRACT TEXT FROM PDF ---
-    if (endpoint === 'extractText') {
-        if (!url) {
-            throw new HttpsError('invalid-argument', 'Missing URL for extraction.');
-        }
-
-        const tempDir = os.tmpdir();
-        const tempFilePath = path.join(tempDir, `extract_${Date.now()}.pdf`);
-
-        try {
-            console.log(`[Extraction] Processing: ${url}`);
-            await downloadFile(url, tempFilePath);
-            const dataBuffer = fs.readFileSync(tempFilePath);
-            const pdfData = await pdfParse(dataBuffer);
-            const cleanText = pdfData.text.replace(/\n\s*\n/g, '\n').trim();
-            return { text: cleanText };
-        } catch (error) {
-            console.error("[Extraction Error]", error);
-            throw new HttpsError('internal', `Failed to extract text: ${error.message}`);
-        } finally {
-            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        }
-    }
-
-    // --- ENDPOINT: CHAT / GENERATE ---
     try {
-        const targetModel = model || DEFAULT_MODEL;
         const cleanConfig = { ...(config || {}) };
         
         // Handle System Instruction
@@ -87,7 +40,7 @@ exports.geminiGateway = onCall(async (request) => {
             }
         }
 
-        // Handle Tools (Function Calling)
+        // Handle Tools
         if (tools) {
             cleanConfig.tools = tools;
         }
@@ -99,19 +52,18 @@ exports.geminiGateway = onCall(async (request) => {
             const validHistory = Array.isArray(history) ? history : [];
             const chat = ai.chats.create({ ...initParams, history: validHistory });
             
-            // Handle Message: Can be string or array of parts (for tool response)
             let msgContent = message;
-            if (!message && contents) msgContent = contents; // Fallback
+            if (!message && contents) msgContent = contents; 
             
             const result = await chat.sendMessage({ message: msgContent || " " });
             
-            // Return full structure to support Function Calling
             responsePayload = {
                 text: result.text,
-                functionCalls: result.functionCalls, // Array of function calls
+                functionCalls: result.functionCalls, 
                 candidates: result.candidates
             };
         } else {
+            // Default: Generate Content
             let formattedContents = contents;
             if (typeof contents === 'string') formattedContents = { parts: [{ text: contents }] };
             

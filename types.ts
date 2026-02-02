@@ -248,6 +248,8 @@ export interface Customer {
   financialRole: FinancialRole; // New
   dependents: number; // New
   
+  referrerId?: string; // NEW: ID of the person who referred this customer
+
   health: HealthInfo;
   analysis: CustomerAnalysis; 
   documents?: CustomerDocument[]; 

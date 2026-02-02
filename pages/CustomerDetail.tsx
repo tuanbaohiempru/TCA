@@ -172,7 +172,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                 {[
                     {id: 'analysis', label: 'Tài chính', icon: 'fa-chart-pie'},
                     {id: 'finance', label: 'Tài sản & Nợ', icon: 'fa-coins'},
-                    {id: 'family', label: 'Gia phả', icon: 'fa-sitemap'},
+                    {id: 'family', label: 'Mạng lưới', icon: 'fa-sitemap'},
                     {id: 'timeline', label: 'Dòng thời gian', icon: 'fa-history'},
                     {id: 'contracts', label: 'Hợp đồng', icon: 'fa-file-contract'},
                     {id: 'claims', label: 'Bồi thường', icon: 'fa-heartbeat'},
@@ -219,16 +219,15 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                     {activeTab === 'family' && (
                         <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-sitemap text-pru-red"></i> Sơ đồ Gia phả</h3>
+                                <h3 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-sitemap text-pru-red"></i> Sơ đồ Mạng lưới</h3>
                                 <button onClick={() => setIsRelationModalOpen(true)} className="text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 px-3 py-2 rounded-lg font-bold transition"><i className="fas fa-plus mr-1"></i> Thêm người thân</button>
                             </div>
                             <FamilyTree centerCustomer={customer} allCustomers={customers} contracts={contracts} />
                             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                                <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Gợi ý Cross-sell từ Gia phả:</h4>
+                                <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Gợi ý Khai thác:</h4>
                                 <ul className="text-xs text-blue-700 dark:text-blue-200 space-y-1 list-disc ml-4">
-                                    <li>Kiểm tra xem <strong>Vợ/Chồng</strong> đã có thẻ sức khỏe chưa?</li>
-                                    <li>Các <strong>Con</strong> đã có quỹ học vấn chưa?</li>
-                                    <li><strong>Bố mẹ</strong> có cần bảo hiểm hưu trí hoặc bệnh hiểm nghèo không?</li>
+                                    <li>Chuyển chế độ <strong>Mạng lưới GT</strong> để xem ai đã giới thiệu khách hàng này.</li>
+                                    <li>Nếu khách hàng là "VIP" (có biểu tượng kim cương), hãy ưu tiên chăm sóc và tặng quà tri ân.</li>
                                 </ul>
                             </div>
                         </div>
@@ -380,6 +379,19 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Tình trạng hôn nhân</label><p className="font-bold">{customer.maritalStatus}</p></div>
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Vai trò tài chính</label><p className="font-bold">{customer.financialRole}</p></div>
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Số người phụ thuộc</label><p className="font-bold">{customer.dependents} người</p></div>
+                                
+                                {/* Referrer Display */}
+                                {customer.referrerId && (
+                                    <div className="md:col-span-2 p-3 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                        <label className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase block mb-1">
+                                            <i className="fas fa-handshake mr-1"></i> Người giới thiệu
+                                        </label>
+                                        <p className="font-bold text-gray-800 dark:text-gray-100">
+                                            {customers.find(c => c.id === customer.referrerId)?.fullName || 'Không xác định'}
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className="md:col-span-2"><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Địa chỉ thường trú / Công ty</label><p className="font-bold">{customer.companyAddress || '---'}</p></div>
                              </div>
                              <h3 className="font-bold text-lg mb-6 border-b pb-2 mt-10">Tình trạng sức khỏe</h3>
@@ -435,7 +447,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
 };
 
 // Sub-components (unchanged, but required for context)
-const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[]; onSave: (updated: Customer) => Promise<void>; onClose: () => void;}> = ({ customer, onSave, onClose }) => {
+const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[]; onSave: (updated: Customer) => Promise<void>; onClose: () => void;}> = ({ customer, allCustomers, onSave, onClose }) => {
     const [formData, setFormData] = useState<Customer>({ ...customer });
     const [tab, setTab] = useState<'general' | 'health' | 'analysis'>('general');
 
@@ -483,6 +495,18 @@ const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[];
                                 <label className="label-text">Số người phụ thuộc</label>
                                 <input type="number" className="input-field" value={formData.dependents} onChange={e => setFormData({ ...formData, dependents: Number(e.target.value) })} />
                             </div>
+                            
+                            {/* NEW: Referrer Selection */}
+                            <div className="md:col-span-1">
+                                <SearchableCustomerSelect 
+                                    customers={allCustomers.filter(c => c.id !== formData.id)} // Prevent self-referral
+                                    value={allCustomers.find(c => c.id === formData.referrerId)?.fullName || ''}
+                                    onChange={(c) => setFormData({ ...formData, referrerId: c.id })}
+                                    label="Người giới thiệu"
+                                    placeholder="Chọn người giới thiệu..."
+                                />
+                            </div>
+
                             <div className="md:col-span-2"><label className="label-text">Địa chỉ</label><input className="input-field" value={formData.companyAddress} onChange={e => setFormData({ ...formData, companyAddress: e.target.value })} /></div>
                         </div>
                     )}

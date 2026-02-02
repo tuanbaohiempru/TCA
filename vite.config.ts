@@ -20,9 +20,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     publicDir: false, 
+    optimizeDeps: {
+      exclude: ['pdfjs-dist'] // Prevent Vite from pre-bundling this
+    },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      rollupOptions: {
+        external: ['pdfjs-dist'] // Don't bundle, use Import Map at runtime
+      }
     },
     plugins: [react()],
     define: {

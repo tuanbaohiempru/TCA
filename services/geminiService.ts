@@ -5,8 +5,9 @@ import { GoogleGenAI } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus, Contract, Product } from "../types";
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Cấu hình Worker cho PDF.js (Sử dụng CDN để tránh lỗi build Vite)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure Worker for PDF.js using CDN to avoid build issues
+// Use specific version matching Import Map (4.0.379) to ensure compatibility
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
 
 // --- CONFIGURATION ---
 const getApiKey = (): string => {
@@ -90,28 +91,54 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
 
 // --- ID CARD EXTRACTION ---
 export const extractIdentityCard = async (base64Image: string) => {
-    if (!clientAI) return null; 
-    try {
-        // FIXED: Use clientAI.models.generateContent (New SDK)
-        const response = await clientAI.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: [
-                { role: 'user', parts: [
-                    { text: "Trích xuất thông tin từ thẻ CCCD này. Trả về JSON: {idCard, fullName, dob (YYYY-MM-DD), gender, companyAddress}" },
-                    { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
-                ]}
-            ]
-        });
-        
-        const text = response.text;
-        if (!text) return null;
+    const model = 'gemini-3-flash-preview';
+    const promptParts = [
+        { text: "Trích xuất thông tin từ thẻ CCCD này. Trả về JSON: {idCard, fullName, dob (YYYY-MM-DD), gender, companyAddress}" },
+        { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+    ];
 
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-    } catch (e) {
-        console.error(e);
-        return null;
+    // 1. Try Cloud Functions (Production Secure Mode)
+    if (isFirebaseReady) {
+        try {
+            const gateway = httpsCallable(functions, 'geminiGateway');
+            const result: any = await gateway({
+                endpoint: 'generateContent',
+                model: model,
+                contents: { role: 'user', parts: promptParts },
+                config: { temperature: 0.1 }
+            });
+            
+            const text = result.data.text;
+            if (!text) return null;
+            
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        } catch (e) {
+            console.warn("Cloud Function extract failed, falling back to client if available.", e);
+        }
     }
+
+    // 2. Fallback to Client Side (Development Mode)
+    if (clientAI) {
+        try {
+            const response = await clientAI.models.generateContent({
+                model: model,
+                contents: [{ role: 'user', parts: promptParts }]
+            });
+            
+            const text = response.text;
+            if (!text) return null;
+
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        } catch (e) {
+            console.error("Client AI extract failed", e);
+            return null;
+        }
+    }
+    
+    console.error("No AI service available for Extraction");
+    return null;
 }
 
 // --- MARKETING FEATURES ---

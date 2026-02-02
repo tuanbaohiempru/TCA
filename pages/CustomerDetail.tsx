@@ -74,6 +74,13 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
         return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [customer, customerContracts]);
 
+    // --- CHECK DATA SUFFICIENCY FOR AI INSIGHT ---
+    const hasEnoughData = useMemo(() => {
+        const hasTimeline = virtualTimeline.length > 0;
+        const hasHistory = customer?.interactionHistory && customer.interactionHistory.length > 0;
+        return hasTimeline || hasHistory;
+    }, [virtualTimeline, customer]);
+
     if (!customer) return <div className="p-10 text-center">Không tìm thấy khách hàng</div>;
 
     const handleAddTimeline = async () => {
@@ -125,25 +132,58 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
         } catch (err) { alert("Lỗi tải file"); }
     };
 
+    // --- AI INSIGHT HANDLER ---
     const handleMagicScan = async () => {
+        if (!hasEnoughData) return;
         setIsMagicScanning(true);
         try {
+            // Enhanced Prompt for MDRT Level Insight
+            const prompt = `
+            Đóng vai chuyên gia tâm lý khách hàng bảo hiểm (MDRT) - Su Sam Squad.
+            
+            DỮ LIỆU ĐẦU VÀO:
+            - Khách hàng: ${customer.fullName} (${new Date().getFullYear() - new Date(customer.dob).getFullYear()} tuổi, Nghề: ${customer.occupation})
+            - Lịch sử tương tác & Hợp đồng (Timeline): ${JSON.stringify(virtualTimeline.slice(0, 10))}
+            
+            NHIỆM VỤ: Phân tích sâu sắc để thấu hiểu khách hàng này.
+            
+            TRẢ VỀ ĐỊNH DẠNG JSON DUY NHẤT:
+            {
+              "personality": "Chọn 1 trong: ${Object.values(PersonalityType).join(' | ')}",
+              "riskTolerance": "Chọn 1 trong: ${Object.values(RiskTolerance).join(' | ')}",
+              "biggestWorry": "Nỗi lo lắng thầm kín nhất dựa trên dữ liệu (Ngắn gọn dưới 10 từ)",
+              "buyCondition": "Hành động cụ thể TVV cần làm để chốt đơn/upsell (Ví dụ: Tặng quà cho con, Gửi bảng so sánh chi tiết...)"
+            }
+            `;
+
             const aiResponse = await chatWithData(
-                `Magic Scan hồ sơ: ${customer.fullName}. Lịch sử: ${JSON.stringify(virtualTimeline.slice(0,5))}. Phân tích tâm lý và trả về JSON {personality, riskTolerance, biggestWorry, suggestedAction}`,
+                prompt,
                 null,
                 { customers: [customer], contracts: customerContracts, products: [], appointments: [], agentProfile: null, messageTemplates: [], illustrations: [] },
                 []
             );
+            
             const jsonMatch = aiResponse.text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const res = JSON.parse(jsonMatch[0]);
-                const updated = { ...customer, analysis: { ...customer.analysis, personality: res.personality, riskTolerance: res.riskTolerance, biggestWorry: res.biggestWorry } };
+                const updated = { 
+                    ...customer, 
+                    analysis: { 
+                        ...customer.analysis, 
+                        personality: res.personality, 
+                        riskTolerance: res.riskTolerance, 
+                        biggestWorry: res.biggestWorry,
+                        buyCondition: res.buyCondition // Map "Action" to buyCondition for UI display
+                    } 
+                };
                 await onUpdateCustomer(updated);
-                alert("Magic Scan hoàn tất!");
+                alert("Đã cập nhật Thấu hiểu 360° thành công!");
+            } else {
+                throw new Error("Không thể đọc kết quả từ AI");
             }
         } catch (e) { 
             console.error(e);
-            alert("Lỗi phân tích AI"); 
+            alert("Lỗi phân tích AI Insight. Vui lòng thử lại sau."); 
         }
         finally { setIsMagicScanning(false); }
     };
@@ -160,10 +200,30 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                     </div>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
-                    <button onClick={handleMagicScan} disabled={isMagicScanning} className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30">
-                        {isMagicScanning ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-magic"></i>} Magic Scan
-                    </button>
-                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 md:flex-none bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-700">Sửa hồ sơ</button>
+                    {/* UPDATED: AI Insight 360 Button */}
+                    <div className="relative group">
+                        <button 
+                            onClick={handleMagicScan} 
+                            disabled={isMagicScanning || !hasEnoughData} 
+                            className={`flex-1 md:flex-none px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                                hasEnoughData 
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:scale-105' 
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                            }`}
+                        >
+                            {isMagicScanning ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-brain"></i>} 
+                            AI Insight 360°
+                        </button>
+                        
+                        {/* Tooltip for Disabled State */}
+                        {!hasEnoughData && (
+                            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-48 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 text-center">
+                                Cần ít nhất 1 tương tác hoặc hợp đồng để phân tích.
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 md:flex-none bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition">Sửa hồ sơ</button>
                 </div>
             </div>
 

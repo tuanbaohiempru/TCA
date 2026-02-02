@@ -136,7 +136,25 @@ const App: React.FC = () => {
                         <Route path="/customers" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/customers/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/appointments" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
-                        <Route path="/contracts" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ContractsPage contracts={state.contracts} customers={state.customers} products={state.products} onAdd={async (c) => { if(isDemo) setState(prev => ({...prev, contracts: [c, ...prev.contracts]})); else await addData(COLLECTIONS.CONTRACTS, c); }} onUpdate={updateContract} onDelete={async (id) => {}} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
+                        {/* FIX: Explicitly Type callbacks for ContractsPage */}
+                        <Route path="/contracts" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <ContractsPage 
+                                    contracts={state.contracts} 
+                                    customers={state.customers} 
+                                    products={state.products} 
+                                    onAdd={async (c: Contract) => { 
+                                        if(isDemo) setState(prev => ({...prev, contracts: [c, ...prev.contracts]})); 
+                                        else await addData(COLLECTIONS.CONTRACTS, c); 
+                                    }} 
+                                    onUpdate={updateContract} 
+                                    onDelete={async (id: string) => { /* Optional delete logic if needed */ }} 
+                                /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
+                        
                         <Route path="/advisory/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AdvisoryPage customers={state.customers} contracts={state.contracts} agentProfile={state.agentProfile} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/product-advisory" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ProductAdvisoryPage customers={state.customers} products={state.products} onSaveIllustration={saveIllustration} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
@@ -144,7 +162,6 @@ const App: React.FC = () => {
                         <Route path="/tools" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ToolsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/tools/finance" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <FinancialPlanning /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
-                        {/* UPDATE: Pass Data to OperationsPage */}
                         <Route path="/tools/ops" element={ 
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
                                 <OperationsPage 

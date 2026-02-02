@@ -13,11 +13,10 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   const location = useLocation();
 
-  // Đã thêm 'Hợp đồng' vào danh sách này để hiển thị trên cả Desktop và Mobile
+  // Đã xóa 'Hợp đồng' khỏi menu chính, chuyển vào trang Công cụ
   const navItems = [
     { path: '/', label: 'Home', icon: 'fa-home' },
     { path: '/customers', label: 'Khách', icon: 'fa-users' },
-    { path: '/contracts', label: 'Hợp đồng', icon: 'fa-file-contract' },
     { path: '/tools', label: 'Công cụ', icon: 'fa-th-large' }, 
     { path: '/settings', label: 'Cài đặt', icon: 'fa-cog' }, 
   ];
@@ -109,7 +108,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
         </main>
 
         {/* 4. BOTTOM NAVIGATION - Mobile Only */}
-        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-pru-card border-t border-gray-200 dark:border-gray-800 flex justify-between items-center min-h-[4.5rem] z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] px-2">
+        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-pru-card border-t border-gray-200 dark:border-gray-800 flex justify-between items-center min-h-[4.5rem] z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] px-6">
             {navItems.map((item) => (
                 <Link 
                     key={item.path}

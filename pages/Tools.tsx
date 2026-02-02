@@ -17,6 +17,7 @@ const ToolsPage: React.FC = () => {
         {
             title: "Công cụ Nghiệp vụ",
             items: [
+                { id: 'contracts', label: 'Quản lý Hợp đồng', icon: 'fa-file-signature', color: 'teal', path: '/contracts' }, // New Item
                 { id: 'claims', label: 'Checklist Bồi thường', icon: 'fa-file-medical', color: 'orange', path: '/tools/ops' },
                 { id: 'objections', label: 'Xử lý từ chối', icon: 'fa-brain', color: 'purple', path: '/tools/ops?tab=objections' },
                 { id: 'business-card', label: 'Danh thiếp QR', icon: 'fa-id-card', color: 'green', path: '/tools/card' },
@@ -66,6 +67,8 @@ const ToolsPage: React.FC = () => {
                 .text-cyan-600 { color: #0891b2; }
                 .bg-orange-50 { background-color: #fff7ed; }
                 .text-orange-600 { color: #ea580c; }
+                .bg-teal-50 { background-color: #f0fdfa; }
+                .text-teal-600 { color: #0d9488; }
             `}</style>
         </div>
     );

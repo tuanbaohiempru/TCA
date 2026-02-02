@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getObjectionSuggestions, checkPreUnderwriting, analyzeClaimSupport } from '../services/geminiService';
 import { Customer, Contract, Product, ContractStatus } from '../types';
 import { SearchableCustomerSelect, formatDateVN } from '../components/Shared';
@@ -11,7 +12,17 @@ interface OperationsPageProps {
 }
 
 const OperationsPage: React.FC<OperationsPageProps> = ({ customers = [], contracts = [], products = [] }) => {
+    const location = useLocation();
     const [activeTab, setActiveTab] = useState<'claims' | 'smart_claim' | 'objections' | 'underwriting'>('smart_claim');
+
+    // --- EFFECT: DEEP LINKING ---
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tabParam = params.get('tab');
+        if (tabParam && ['claims', 'smart_claim', 'objections', 'underwriting'].includes(tabParam)) {
+            setActiveTab(tabParam as any);
+        }
+    }, [location.search]);
 
     // --- OBJECTION HANDLING STATES ---
     const [objectionMode, setObjectionMode] = useState<'solve' | 'practice'>('solve');

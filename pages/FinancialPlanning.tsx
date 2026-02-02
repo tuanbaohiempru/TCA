@@ -1,12 +1,23 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
 import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
 import { FinancialGoal } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
+    const location = useLocation();
     const [activeTab, setActiveTab] = useState<'retirement' | 'education' | 'compound'>('retirement');
+
+    // --- EFFECT: DEEP LINKING ---
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tabParam = params.get('tab');
+        if (tabParam && ['retirement', 'education', 'compound'].includes(tabParam)) {
+            setActiveTab(tabParam as any);
+        }
+    }, [location.search]);
 
     // Retirement State
     // Added: inflationRate explicitly in state to allow adjustment

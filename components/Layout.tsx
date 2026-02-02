@@ -13,10 +13,12 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   const location = useLocation();
 
+  // Đã thêm 'Hợp đồng' vào danh sách này để hiển thị trên cả Desktop và Mobile
   const navItems = [
     { path: '/', label: 'Home', icon: 'fa-home' },
     { path: '/customers', label: 'Khách', icon: 'fa-users' },
-    { path: '/tools', label: 'Công cụ', icon: 'fa-th-large' }, // New Hub
+    { path: '/contracts', label: 'Hợp đồng', icon: 'fa-file-contract' },
+    { path: '/tools', label: 'Công cụ', icon: 'fa-th-large' }, 
     { path: '/settings', label: 'Cài đặt', icon: 'fa-cog' }, 
   ];
 
@@ -58,11 +60,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 </Link>
               </li>
             ))}
-             <li>
-                <Link to="/contracts" className={`flex items-center px-4 py-3 rounded-lg transition-colors ${isActive('/contracts') ? 'text-pru-red bg-red-50 dark:bg-red-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                    <i className="fas fa-file-contract w-6 text-center mr-3"></i> Hợp đồng
-                </Link>
-             </li>
           </ul>
         </nav>
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
@@ -112,7 +109,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
         </main>
 
         {/* 4. BOTTOM NAVIGATION - Mobile Only */}
-        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-pru-card border-t border-gray-200 dark:border-gray-800 flex justify-around items-center min-h-[4.5rem] z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-pru-card border-t border-gray-200 dark:border-gray-800 flex justify-between items-center min-h-[4.5rem] z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] px-2">
             {navItems.map((item) => (
                 <Link 
                     key={item.path}
@@ -120,7 +117,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                     className={`flex flex-col items-center justify-center w-full py-2 ${isActive(item.path) ? 'text-pru-red' : 'text-gray-400'}`}
                 >
                     <i className={`fas ${item.icon} text-lg mb-1 ${isActive(item.path) ? 'animate-bounce-short' : ''}`}></i>
-                    <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
                 </Link>
             ))}
         </nav>

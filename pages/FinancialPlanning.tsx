@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
 import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
@@ -83,18 +83,18 @@ const FinancialPlanning: React.FC = () => {
         };
     }, [compoundInputs]);
 
+    // --- SMART METAPHOR LOGIC ---
+    const getDailyMetaphor = (amount: number) => {
+        if (amount < 30000) return "tương đương một ly cà phê vỉa hè";
+        if (amount < 70000) return "tương đương một bát phở sáng";
+        if (amount < 150000) return "tương đương một ly Starbucks hoặc vé xem phim";
+        if (amount < 500000) return "tương đương một bữa tối tụ tập bạn bè";
+        return null; // Too high for consumer metaphors
+    };
+
     // --- CHART DATA (STACKED BAR FOR RETIREMENT) ---
     const chartData = useMemo(() => {
         if (activeTab === 'retirement') {
-            // Calculate "Gross Need" (Total need ignoring Asset FV and Pension for visualization)
-            // Gross Need = Shortfall + FutureSavings + PensionValue(approx)
-            // But simplify: We visualize Sources covering the Need.
-            
-            // Value of Pension in terms of "Fund Equivalent" is tricky. 
-            // Let's visualize: [FV Assets] + [Gap] = Required Fund (Net).
-            // NOTE: calculateRetirement returns 'requiredAmount' as the NET amount needed after Pension.
-            // So if Has Pension, the 'RequiredAmount' bar is smaller than if No Pension.
-            
             return [
                 {
                     name: 'Nguồn vốn',
@@ -117,6 +117,8 @@ const FinancialPlanning: React.FC = () => {
 
     // --- RENDER HELPERS ---
     const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
+    const dailySavingRetire = Math.round((retireResult.monthlySavingNeeded || 0) / 30);
+    const metaphorRetire = getDailyMetaphor(dailySavingRetire);
 
     return (
         <div className="space-y-6 pb-20 max-w-6xl mx-auto">
@@ -399,12 +401,22 @@ const FinancialPlanning: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        {/* Part 5 */}
+                                        {/* Part 5: Dynamic Metaphor */}
                                         <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-800">
                                             <strong className="block text-green-800 dark:text-green-300 mb-2 uppercase text-xs tracking-wider">4. Giải pháp & Hành động</strong>
                                             <p className="italic">
-                                                "Tin vui là nếu bắt đầu ngay hôm nay, anh/chị chỉ cần để dành <strong>{formatMoney(retireResult.monthlySavingNeeded || 0)}/tháng</strong>. 
-                                                Chia nhỏ ra chỉ bằng <strong>{formatMoney(Math.round((retireResult.monthlySavingNeeded || 0) / 30))} mỗi ngày</strong> - tương đương một bữa ăn trưa thôi ạ.
+                                                "Tin vui là nếu bắt đầu ngay hôm nay, anh/chị cần để dành khoảng <strong>{formatMoney(retireResult.monthlySavingNeeded || 0)}/tháng</strong>.
+                                                <br/><br/>
+                                                {metaphorRetire ? (
+                                                    <span>
+                                                        Chia nhỏ ra chỉ bằng <strong>{formatMoney(dailySavingRetire)} mỗi ngày</strong> - {metaphorRetire} thôi ạ.
+                                                    </span>
+                                                ) : (
+                                                    <span>
+                                                        Đây là một con số không nhỏ, nhưng nó phản ánh đúng kỳ vọng về mức sống hưu trí chất lượng cao mà anh/chị mong muốn. 
+                                                        Chúng ta có thể cân nhắc bắt đầu với mức thấp hơn và tăng dần theo thu nhập (Top-up sau).
+                                                    </span>
+                                                )}
                                                 <br/><br/>
                                                 Nhưng nếu trì hoãn 5 năm nữa, con số này sẽ tăng gấp đôi. <strong>Thời gian chính là tài sản quý giá nhất lúc này.</strong>"
                                             </p>

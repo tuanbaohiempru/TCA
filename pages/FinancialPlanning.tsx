@@ -3,8 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
 import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
-import { FinancialGoal } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, PieChart, Pie, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
@@ -187,6 +186,7 @@ const FinancialPlanning: React.FC = () => {
                                 </h2>
                                 <p className="text-sm text-gray-400">
                                     Đã bao gồm lạm phát {activeTab === 'retirement' ? retireInputs.inflationRate : eduInputs.inflationRate}%/năm
+                                    {activeTab === 'retirement' && <span className="text-green-400 font-bold ml-1">(Trọn đời)</span>}
                                 </p>
                             </div>
 
@@ -289,7 +289,9 @@ const FinancialPlanning: React.FC = () => {
                                     <h3 className="font-bold text-lg mb-4 text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
                                         <i className="fas fa-microphone-alt"></i> Kịch bản tư vấn: Bức tranh Hưu trí
                                     </h3>
-                                    <div className="space-y-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif">
+                                    
+                                    {/* Updated: Font readable sans-serif, larger text, looser leading */}
+                                    <div className="space-y-6 text-base text-gray-800 dark:text-gray-200 leading-loose">
                                         {/* Part 1 */}
                                         <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800">
                                             <strong className="block text-indigo-800 dark:text-indigo-300 mb-2 uppercase text-xs tracking-wider">1. Ba Chặng đường & Quỹ thời gian</strong>
@@ -301,15 +303,19 @@ const FinancialPlanning: React.FC = () => {
                                             </p>
                                         </div>
 
-                                        {/* Part 2 */}
+                                        {/* Part 2: Updated with Inflation Explanation */}
                                         <div>
-                                            <strong className="block text-red-600 dark:text-red-400 mb-1 uppercase text-xs tracking-wider">2. Kẻ thù Lạm phát</strong>
+                                            <strong className="block text-red-600 dark:text-red-400 mb-1 uppercase text-xs tracking-wider">2. Lạm phát & Sức mua trọn đời</strong>
                                             <p>
                                                 "Anh/chị thấy con số <strong>{retireInputs.inflationRate}% lạm phát</strong> chứ ạ? 
                                                 Để duy trì mức sống <strong>{formatMoney(retireInputs.expense)}/tháng</strong> như hiện tại, 
                                                 thì {retireResult.details.yearsToRetire} năm nữa, anh/chị sẽ cần khoảng <strong>{formatMoney(Math.round(retireResult.details.futureMonthlyExpense))}</strong> mỗi tháng.
-                                                <br/>
-                                                Chúng ta không chỉ tiết kiệm tiền, mà phải <strong>tiết kiệm sức mua</strong>."
+                                                <br/><br/>
+                                                <span className="block bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border-l-4 border-yellow-400 text-yellow-800 dark:text-yellow-200 italic text-sm">
+                                                    "Đặc biệt, con số Quỹ cần có này <strong>đã tính trượt giá cho cả {retireResult.details.yearsInRetirement} năm hưu trí</strong>. 
+                                                    Tức là ngay cả khi anh/chị đã nghỉ hưu, số tiền rút ra tiêu dùng hàng tháng vẫn <strong>tự động tăng {retireInputs.inflationRate}%/năm</strong>. 
+                                                    Điều này đảm bảo bát phở năm 80 tuổi của anh/chị vẫn 'đầy đặn' y như năm 60 tuổi."
+                                                </span>
                                             </p>
                                         </div>
 

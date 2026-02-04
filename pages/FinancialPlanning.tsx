@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
 import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
 import { FinancialGoal } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, PieChart, Pie, Legend } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
@@ -20,7 +20,6 @@ const FinancialPlanning: React.FC = () => {
     }, [location.search]);
 
     // Retirement State
-    // Added: inflationRate explicitly in state to allow adjustment
     const [retireInputs, setRetireInputs] = useState({
         currentAge: 30, retireAge: 60, lifeExpectancy: 85, expense: 15000000, savings: 100000000, inflationRate: 4
     });
@@ -35,7 +34,7 @@ const FinancialPlanning: React.FC = () => {
         principal: 100000000, monthlyAdd: 5000000, rate: 8, years: 15
     });
 
-    const [showExplanation, setShowExplanation] = useState(false);
+    const [showScript, setShowScript] = useState(false); // Toggle for Consultant Script
 
     // --- CALCULATIONS ---
 
@@ -63,58 +62,19 @@ const FinancialPlanning: React.FC = () => {
         let total = compoundInputs.principal;
         const r = compoundInputs.rate / 100 / 12;
         const n = compoundInputs.years * 12;
+        let totalPrincipal = compoundInputs.principal + (compoundInputs.monthlyAdd * n);
+        
         for (let i = 0; i < n; i++) {
             total = (total + compoundInputs.monthlyAdd) * (1 + r);
         }
-        return Math.round(total);
+        return {
+            total: Math.round(total),
+            totalPrincipal,
+            interest: Math.round(total - totalPrincipal)
+        };
     }, [compoundInputs]);
 
-    // --- ADVANCED ANALYSIS: "THE WHY" ---
-
-    // 1. Cost of Delay Calculation
-    const costOfDelay = useMemo(() => {
-        if (activeTab === 'retirement') {
-            const newAge = retireInputs.currentAge + 5;
-            if (newAge >= retireInputs.retireAge) return null;
-            
-            const delayedResult = calculateRetirement(
-                newAge, retireInputs.retireAge, retireInputs.lifeExpectancy, retireInputs.expense, retireInputs.inflationRate / 100, 0.07, retireInputs.savings
-            );
-            return {
-                waitYears: 5,
-                currentMonthly: retireResult.monthlySavingNeeded || 0,
-                delayedMonthly: delayedResult.monthlySavingNeeded || 0,
-                increasePercent: ((delayedResult.monthlySavingNeeded || 0) / (retireResult.monthlySavingNeeded || 1) * 100) - 100
-            };
-        }
-        return null;
-    }, [activeTab, retireInputs, retireResult]);
-
-    // 2. Inflation Reality (Quy đổi giá trị tương lai về hiện tại)
-    const presentValueReality = useMemo(() => {
-        if (activeTab === 'retirement') {
-            const years = retireInputs.retireAge - retireInputs.currentAge;
-            const inflation = retireInputs.inflationRate / 100;
-            // PV = FV / (1+r)^n
-            const pvOfGoal = retireResult.requiredAmount / Math.pow(1 + inflation, years);
-            
-            // Example Goods Price: A bowl of Pho (50k)
-            const phoPriceNow = 50000;
-            const phoPriceFuture = 50000 * Math.pow(1 + inflation, years);
-
-            return {
-                years,
-                futureAmount: retireResult.requiredAmount,
-                presentValue: pvOfGoal,
-                ratio: retireResult.requiredAmount / pvOfGoal,
-                phoNow: phoPriceNow,
-                phoFuture: phoPriceFuture
-            };
-        }
-        return null;
-    }, [activeTab, retireInputs, retireResult]);
-
-    // 3. Chart Data
+    // --- CHART DATA ---
     const chartData = useMemo(() => {
         if (activeTab === 'retirement') {
             return [
@@ -131,6 +91,9 @@ const FinancialPlanning: React.FC = () => {
         return [];
     }, [activeTab, retireResult, eduResult]);
 
+    // --- RENDER HELPERS ---
+    const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
+
     return (
         <div className="space-y-6 pb-20 max-w-6xl mx-auto">
             <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -142,9 +105,9 @@ const FinancialPlanning: React.FC = () => {
 
             {/* TAB SELECTOR */}
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto">
-                <button onClick={() => setActiveTab('retirement')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'retirement' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><i className="fas fa-umbrella-beach mr-2"></i>Hưu trí an nhàn</button>
-                <button onClick={() => setActiveTab('education')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'education' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><i className="fas fa-graduation-cap mr-2"></i>Quỹ học vấn</button>
-                <button onClick={() => setActiveTab('compound')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'compound' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><i className="fas fa-chart-line mr-2"></i>Lãi kép (Đầu tư)</button>
+                <button onClick={() => setActiveTab('retirement')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'retirement' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-umbrella-beach mr-2"></i>Hưu trí an nhàn</button>
+                <button onClick={() => setActiveTab('education')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'education' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-graduation-cap mr-2"></i>Quỹ học vấn</button>
+                <button onClick={() => setActiveTab('compound')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'compound' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-chart-line mr-2"></i>Lãi kép (Đầu tư)</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -211,193 +174,184 @@ const FinancialPlanning: React.FC = () => {
                 <div className="lg:col-span-8 space-y-6">
                     
                     {/* 1. HERO RESULT CARD */}
-                    <div className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-pru-red/20 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
-                        
-                        <div className="flex-1 text-center md:text-left z-10">
-                            {activeTab === 'retirement' && (
-                                <>
-                                    <p className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Mục tiêu hưu trí ({retireInputs.retireAge} tuổi)</p>
-                                    <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                                        <span className="text-4xl md:text-5xl font-black text-white">{(retireResult.requiredAmount / 1e9).toFixed(1)}</span>
-                                        <span className="text-xl text-gray-400 font-bold">Tỷ VNĐ</span>
-                                    </div>
-                                    <div className="mt-4 flex gap-4 justify-center md:justify-start">
-                                        <div className="text-left">
-                                            <p className="text-[10px] text-gray-400 uppercase">Thiếu hụt</p>
-                                            <p className="text-lg font-bold text-red-400">{(retireResult.shortfall / 1e9).toFixed(1)} Tỷ</p>
-                                        </div>
-                                        <div className="w-px bg-white/20"></div>
-                                        <div className="text-left">
-                                            <p className="text-[10px] text-gray-400 uppercase">Tiết kiệm/tháng</p>
-                                            <p className="text-lg font-bold text-green-400">{(retireResult.monthlySavingNeeded || 0).toLocaleString()} đ</p>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                            {activeTab === 'education' && (
-                                <>
-                                    <p className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Quỹ học vấn mục tiêu</p>
-                                    <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                                        <span className="text-4xl md:text-5xl font-black text-white">{(eduResult.requiredAmount / 1e6).toFixed(0)}</span>
-                                        <span className="text-xl text-gray-400 font-bold">Triệu</span>
-                                    </div>
-                                    <div className="mt-4 flex gap-4 justify-center md:justify-start">
-                                        <div className="text-left"><p className="text-[10px] text-gray-400 uppercase">Thiếu hụt</p><p className="text-lg font-bold text-orange-400">{(eduResult.shortfall / 1e6).toFixed(0)} Tr</p></div>
-                                        <div className="w-px bg-white/20"></div>
-                                        <div className="text-left"><p className="text-[10px] text-gray-400 uppercase">Cần để dành/tháng</p><p className="text-lg font-bold text-green-400">{(eduResult.monthlySavingNeeded || 0).toLocaleString()} đ</p></div>
-                                    </div>
-                                </>
-                            )}
-                            {activeTab === 'compound' && (
-                                <>
-                                    <p className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Giá trị tương lai (Sau {compoundInputs.years} năm)</p>
-                                    <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                                        <span className="text-4xl md:text-5xl font-black text-white">{(compoundResult / 1e6).toFixed(0)}</span>
-                                        <span className="text-xl text-gray-400 font-bold">Triệu</span>
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-2 italic"><i className="fas fa-info-circle mr-1"></i> Sức mạnh của lãi suất kép {compoundInputs.rate}%/năm</p>
-                                </>
-                            )}
-                        </div>
-
-                        {/* VISUAL CHART (GAP ANALYSIS) */}
-                        {(activeTab === 'retirement' || activeTab === 'education') && (
-                            <div className="w-full md:w-48 h-40 bg-white/5 rounded-2xl p-2 relative">
-                                <p className="text-[10px] text-center text-gray-400 mb-1">Mức độ hoàn thành</p>
-                                <ResponsiveContainer width="100%" height="80%">
-                                    <BarChart data={chartData}>
-                                        <XAxis dataKey="name" hide />
-                                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', fontSize: '12px'}} itemStyle={{color: '#fff'}} />
-                                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                            {chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                                <div className="absolute bottom-2 left-0 w-full text-center">
-                                    <span className="text-xs font-bold text-white">
-                                        {Math.round((chartData[0].value / (chartData[0].value + chartData[1].value)) * 100)}%
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* 2. THE STORY SECTION (INSIGHTS) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        
-                        {/* A. Inflation Reality Check */}
-                        {presentValueReality && (
-                            <div className="bg-white dark:bg-pru-card p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-                                <div className="flex justify-between items-start mb-3">
-                                    <h4 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 text-sm uppercase">
-                                        <i className="fas fa-hamburger text-orange-500"></i> Tại sao số tiền lớn thế?
-                                    </h4>
-                                    <button onClick={() => setShowExplanation(!showExplanation)} className="text-xs text-blue-500 underline">Giải thích</button>
-                                </div>
-                                
-                                {showExplanation && (
-                                    <div className="mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded text-[10px] text-gray-600 dark:text-gray-400">
-                                        <p>Công thức: <strong>FV = PV * (1 + Lạm phát)^Năm</strong></p>
-                                        <p>Để duy trì mức sống hiện tại, số tiền cần thiết sẽ tăng lên theo lạm phát {retireInputs.inflationRate}%/năm.</p>
-                                    </div>
-                                )}
-
-                                <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl text-sm text-gray-700 dark:text-gray-300 space-y-3">
-                                    <div>
-                                        <p className="text-xs text-gray-500 mb-1">Ví dụ: Một bát phở ngon</p>
-                                        <div className="flex justify-between items-center">
-                                            <div className="text-center">
-                                                <p className="text-xs font-bold text-gray-400">Hiện tại</p>
-                                                <p className="font-bold text-lg text-gray-800 dark:text-gray-100">{presentValueReality.phoNow.toLocaleString()} đ</p>
-                                            </div>
-                                            <i className="fas fa-arrow-right text-orange-400"></i>
-                                            <div className="text-center">
-                                                <p className="text-xs font-bold text-gray-400">{presentValueReality.years} năm nữa</p>
-                                                <p className="font-bold text-lg text-orange-600">{presentValueReality.phoFuture.toLocaleString()} đ</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="border-t border-orange-200 dark:border-orange-800 pt-2">
-                                        <p className="italic text-xs">
-                                            "Để mua được những thứ trị giá <strong>10 triệu</strong> bây giờ, 
-                                            sau {presentValueReality.years} năm nữa anh/chị cần <strong>{(10000000 * presentValueReality.ratio).toLocaleString()} đ</strong>."
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* B. Daily Breakdown (Psychology) */}
-                        {(retireResult.monthlySavingNeeded || eduResult.monthlySavingNeeded) && (
-                            <div className="bg-white dark:bg-pru-card p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-                                <h4 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 mb-3 text-sm uppercase">
-                                    <i className="fas fa-coffee text-brown-500"></i> Chia nhỏ mục tiêu
-                                </h4>
-                                <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Thay vì nghĩ đến tiền triệu, hãy nghĩ là:</p>
-                                        <p className="text-2xl font-black text-green-600 dark:text-green-400 mt-1">
-                                            {Math.round(((retireResult.monthlySavingNeeded || eduResult.monthlySavingNeeded || 0) / 30)).toLocaleString()} đ
-                                            <span className="text-sm font-bold text-gray-500 ml-1">/ ngày</span>
-                                        </p>
-                                    </div>
-                                    <div className="text-3xl opacity-20">☕️</div>
-                                </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center italic">
-                                    "Chỉ bằng 2 cốc cà phê mỗi ngày để đổi lấy sự an tâm trọn đời."
+                    {activeTab !== 'compound' ? (
+                        <div className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-pru-red/20 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+                            
+                            <div className="flex-1 text-center md:text-left z-10">
+                                <p className="text-gray-400 font-bold text-sm uppercase tracking-widest mb-1">
+                                    {activeTab === 'retirement' ? 'Quỹ hưu cần có' : 'Quỹ học vấn cần có'}
+                                </p>
+                                <h2 className="text-3xl md:text-4xl font-black mb-2 text-white">
+                                    {formatMoney(activeTab === 'retirement' ? retireResult.requiredAmount : eduResult.requiredAmount)}
+                                </h2>
+                                <p className="text-sm text-gray-400">
+                                    Đã bao gồm lạm phát {activeTab === 'retirement' ? retireInputs.inflationRate : eduInputs.inflationRate}%/năm
                                 </p>
                             </div>
-                        )}
-                    </div>
 
-                    {/* 3. COST OF DELAY (FOMO GENERATOR) */}
-                    {costOfDelay && costOfDelay.increasePercent > 0 && (
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 p-6 rounded-2xl relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10">
-                                <i className="fas fa-hourglass-half text-6xl text-red-600"></i>
-                            </div>
-                            <h4 className="font-black text-red-700 dark:text-red-400 text-lg mb-2 uppercase flex items-center gap-2">
-                                <i className="fas fa-exclamation-triangle"></i> Cái giá của sự trì hoãn
-                            </h4>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                                Nếu anh/chị quyết định đợi <span className="font-bold">5 năm nữa</span> mới bắt đầu tích lũy, áp lực tài chính sẽ tăng lên đáng kể:
-                            </p>
-                            
-                            <div className="flex items-end gap-4 mb-2">
-                                <div className="flex-1">
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Hôm nay</p>
-                                    <div className="h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center px-3 font-bold text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                                        {costOfDelay.currentMonthly.toLocaleString()} đ/tháng
-                                    </div>
-                                </div>
-                                <div className="pb-3 text-gray-400"><i className="fas fa-arrow-right"></i></div>
-                                <div className="flex-1">
-                                    <p className="text-xs text-red-600 dark:text-red-400 uppercase font-bold">5 năm nữa</p>
-                                    <div className="h-10 bg-red-100 dark:bg-red-900/40 rounded-lg flex items-center px-3 font-black text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
-                                        {costOfDelay.delayedMonthly.toLocaleString()} đ/tháng
-                                    </div>
+                            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/10 w-full md:w-auto min-w-[200px] z-10">
+                                <p className="text-xs font-bold text-red-300 uppercase mb-1">Thiếu hụt (Gap)</p>
+                                <p className="text-xl font-bold text-white mb-2">
+                                    {formatMoney(activeTab === 'retirement' ? retireResult.shortfall : eduResult.shortfall)}
+                                </p>
+                                <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-red-500 rounded-full" 
+                                        style={{width: `${Math.min(100, ((activeTab === 'retirement' ? retireResult.shortfall : eduResult.shortfall) / (activeTab === 'retirement' ? retireResult.requiredAmount : eduResult.requiredAmount)) * 100)}%`}}
+                                    ></div>
                                 </div>
                             </div>
-                            
-                            <p className="text-xs font-bold text-red-600 dark:text-red-400 mt-2 text-center bg-white/50 dark:bg-black/20 py-2 rounded-lg">
-                                Số tiền phải đóng tăng thêm {costOfDelay.increasePercent.toFixed(0)}% mỗi tháng!
-                            </p>
+                        </div>
+                    ) : (
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+                            <div className="flex justify-between items-center z-10 relative">
+                                <div>
+                                    <p className="text-indigo-200 font-bold text-sm uppercase tracking-widest mb-1">Tổng tài sản sau {compoundInputs.years} năm</p>
+                                    <h2 className="text-4xl font-black text-white">{formatMoney(compoundResult.total)}</h2>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-indigo-200 text-xs">Tổng gốc: {formatMoney(compoundResult.totalPrincipal)}</p>
+                                    <p className="text-green-300 font-bold text-lg">+ {formatMoney(compoundResult.interest)} (Lãi)</p>
+                                </div>
+                            </div>
                         </div>
                     )}
 
+                    {/* 2. CHART & DETAILS */}
+                    {activeTab !== 'compound' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4">Cơ cấu quỹ</h3>
+                                <div className="h-48 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={chartData}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={80}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {chartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip formatter={(value: number) => formatMoney(value)} />
+                                            <Legend verticalAlign="bottom" height={36}/>
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col justify-center space-y-4">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase mb-1">Cần tiết kiệm mỗi tháng</p>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl shadow-sm">
+                                            <i className="fas fa-piggy-bank"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-2xl font-black text-green-600 dark:text-green-400">
+                                                {formatMoney(activeTab === 'retirement' ? (retireResult.monthlySavingNeeded || 0) : (eduResult.monthlySavingNeeded || 0))}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Đầu tư với lãi suất 7%/năm</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs text-gray-600 dark:text-gray-300 italic border border-gray-100 dark:border-gray-700">
+                                    "Chỉ cần bớt đi {formatMoney(Math.round((activeTab === 'retirement' ? (retireResult.monthlySavingNeeded || 0) : (eduResult.monthlySavingNeeded || 0)) / 30))} mỗi ngày."
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. CONSULTATION SCRIPT CARD (Retirement Specific) */}
+                    {activeTab === 'retirement' && (
+                        <>
+                            <div className="flex justify-end">
+                                <button 
+                                    onClick={() => setShowScript(!showScript)}
+                                    className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-3 py-2 rounded-lg transition"
+                                >
+                                    <i className={`fas ${showScript ? 'fa-eye-slash' : 'fa-file-alt'}`}></i> 
+                                    {showScript ? 'Ẩn kịch bản' : 'Hiện kịch bản tư vấn mẫu'}
+                                </button>
+                            </div>
+
+                            {showScript && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-2xl border-l-4 border-indigo-500 shadow-lg animate-fade-in relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <i className="fas fa-quote-right text-6xl text-indigo-500"></i>
+                                    </div>
+                                    <h3 className="font-bold text-lg mb-4 text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                                        <i className="fas fa-microphone-alt"></i> Kịch bản tư vấn: Bức tranh Hưu trí
+                                    </h3>
+                                    <div className="space-y-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif">
+                                        {/* Part 1 */}
+                                        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                                            <strong className="block text-indigo-800 dark:text-indigo-300 mb-2 uppercase text-xs tracking-wider">1. Ba Chặng đường & Quỹ thời gian</strong>
+                                            <p className="italic">
+                                                "Thưa anh/chị, từ nay đến lúc nghỉ hưu ({retireInputs.retireAge} tuổi), chúng ta còn <strong>{retireResult.details.yearsToRetire} năm</strong> để tích lũy. 
+                                                Tuy nhiên, chặng đường hưởng thụ sau đó kéo dài tới tận <strong>{retireResult.details.yearsInRetirement} năm</strong> (đến {retireInputs.lifeExpectancy} tuổi). 
+                                                <br/><br/>
+                                                Câu hỏi quan trọng là: <strong>Ai sẽ nuôi 'người bạn già' đó trong suốt {retireResult.details.yearsInRetirement} năm ròng rã khi sức lao động không còn?</strong>"
+                                            </p>
+                                        </div>
+
+                                        {/* Part 2 */}
+                                        <div>
+                                            <strong className="block text-red-600 dark:text-red-400 mb-1 uppercase text-xs tracking-wider">2. Kẻ thù Lạm phát</strong>
+                                            <p>
+                                                "Anh/chị thấy con số <strong>{retireInputs.inflationRate}% lạm phát</strong> chứ ạ? 
+                                                Để duy trì mức sống <strong>{formatMoney(retireInputs.expense)}/tháng</strong> như hiện tại, 
+                                                thì {retireResult.details.yearsToRetire} năm nữa, anh/chị sẽ cần khoảng <strong>{formatMoney(Math.round(retireResult.details.futureMonthlyExpense))}</strong> mỗi tháng.
+                                                <br/>
+                                                Chúng ta không chỉ tiết kiệm tiền, mà phải <strong>tiết kiệm sức mua</strong>."
+                                            </p>
+                                        </div>
+
+                                        {/* Part 3 */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                <strong className="block text-gray-900 dark:text-gray-100 mb-1">Tổng quỹ cần có</strong>
+                                                <p className="text-xl font-bold text-gray-800 dark:text-gray-200">{formatMoney(retireResult.requiredAmount)}</p>
+                                                <p className="text-xs text-gray-500 mt-1">Con số bắt buộc để an tâm suốt {retireResult.details.yearsInRetirement} năm hưu trí.</p>
+                                            </div>
+                                            <div className="p-3 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 rounded-lg">
+                                                <strong className="block text-red-700 dark:text-red-300 mb-1">Thiếu hụt (Gap)</strong>
+                                                <p className="text-xl font-bold text-red-600 dark:text-red-400">{formatMoney(retireResult.shortfall)}</p>
+                                                <p className="text-xs text-red-500 mt-1">Lỗ hổng này nếu không lấp đầy ngay, tuổi già sẽ phải phụ thuộc con cái.</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Part 4 */}
+                                        <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-800">
+                                            <strong className="block text-green-800 dark:text-green-300 mb-2 uppercase text-xs tracking-wider">3. Giải pháp & Hành động</strong>
+                                            <p className="italic">
+                                                "Tin vui là nếu bắt đầu ngay hôm nay, anh/chị chỉ cần để dành <strong>{formatMoney(retireResult.monthlySavingNeeded || 0)}/tháng</strong>. 
+                                                Chia nhỏ ra chỉ bằng <strong>{formatMoney(Math.round((retireResult.monthlySavingNeeded || 0) / 30))} mỗi ngày</strong> - tương đương một bữa ăn trưa thôi ạ.
+                                                <br/><br/>
+                                                Nhưng nếu trì hoãn 5 năm nữa, con số này sẽ tăng gấp đôi. <strong>Thời gian chính là tài sản quý giá nhất lúc này.</strong>"
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
-            
+
             <style>{`
-                .label-text { display: block; font-size: 0.75rem; font-weight: 700; color: #6b7280; margin-bottom: 0.25rem; text-transform: uppercase; }
+                .label-text { display: block; font-size: 0.7rem; font-weight: 700; color: #6b7280; margin-bottom: 0.25rem; }
                 .dark .label-text { color: #9ca3af; }
-                .input-field { width: 100%; border: 1px solid #e5e7eb; padding: 0.75rem; border-radius: 1rem; outline: none; font-size: 0.875rem; transition: all; background-color: #fff; color: #111827; }
+                .input-field { width: 100%; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.5rem; outline: none; font-size: 0.875rem; transition: all; background-color: #fff; color: #111827; }
                 .dark .input-field { background-color: #111827; border-color: #374151; color: #f3f4f6; }
-                .input-field:focus { border-color: #ed1b2e; ring: 2px solid #ed1b2e20; }
-                .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+                .input-field:focus { border-color: #ed1b2e; ring: 1px solid #ed1b2e; }
+                .animate-fade-in { animation: fadeIn 0.4s ease-out; }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
             `}</style>
         </div>

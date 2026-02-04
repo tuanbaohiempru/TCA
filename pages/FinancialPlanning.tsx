@@ -32,6 +32,9 @@ const FinancialPlanning: React.FC = () => {
         salaryForSI: 10000000
     });
 
+    // NEW: Option to control where the existing savings are kept
+    const [moveAssetsToInvestment, setMoveAssetsToInvestment] = useState(false);
+
     // Education State
     const [eduInputs, setEduInputs] = useState({
         childAge: 5, uniStartAge: 18, duration: 4, annualTuition: 100000000, currentSavings: 50000000, 
@@ -56,8 +59,13 @@ const FinancialPlanning: React.FC = () => {
         retireInputs.inflationRate / 100, 
         retireInputs.investmentRate / 100, 
         retireInputs.savings,
-        { hasSI: retireInputs.hasSI, salaryForSI: retireInputs.salaryForSI }
-    ), [retireInputs]);
+        { 
+            hasSI: retireInputs.hasSI, 
+            salaryForSI: retireInputs.salaryForSI,
+            // Logic: If user agrees to move assets, grow at Investment Rate. Else, grow at Savings Rate.
+            existingAssetRate: moveAssetsToInvestment ? (retireInputs.investmentRate / 100) : (retireInputs.savingsRate / 100)
+        }
+    ), [retireInputs, moveAssetsToInvestment]);
 
     // 2. SCENARIO B: BANK SAVINGS (The Problem/Benchmark)
     const bankResult = useMemo(() => calculateRetirement(
@@ -68,7 +76,12 @@ const FinancialPlanning: React.FC = () => {
         retireInputs.inflationRate / 100, 
         retireInputs.savingsRate / 100, 
         retireInputs.savings,
-        { hasSI: retireInputs.hasSI, salaryForSI: retireInputs.salaryForSI }
+        { 
+            hasSI: retireInputs.hasSI, 
+            salaryForSI: retireInputs.salaryForSI,
+            // In Bank scenario, existing assets are definitely in Bank rate
+            existingAssetRate: retireInputs.savingsRate / 100
+        }
     ), [retireInputs]);
 
     const eduResult = useMemo(() => calculateEducation(
@@ -159,7 +172,26 @@ const FinancialPlanning: React.FC = () => {
                                 
                                 {/* Financial Inputs */}
                                 <div><label className="label-text">Chi tiêu mong muốn / tháng (Hiện tại)</label><CurrencyInput className="input-field" value={retireInputs.expense} onChange={v => setRetireInputs({...retireInputs, expense: v})} /></div>
-                                <div><label className="label-text">Tài sản tích lũy hiện có</label><CurrencyInput className="input-field" value={retireInputs.savings} onChange={v => setRetireInputs({...retireInputs, savings: v})} /></div>
+                                <div>
+                                    <label className="label-text">Tài sản tích lũy hiện có</label>
+                                    <CurrencyInput className="input-field" value={retireInputs.savings} onChange={v => setRetireInputs({...retireInputs, savings: v})} />
+                                    {/* Asset Allocation Toggle */}
+                                    {retireInputs.savings > 0 && (
+                                        <div className="mt-2 flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                                            <input 
+                                                type="checkbox" 
+                                                id="moveAssets" 
+                                                className="w-4 h-4 accent-green-600" 
+                                                checked={moveAssetsToInvestment} 
+                                                onChange={e => setMoveAssetsToInvestment(e.target.checked)} 
+                                            />
+                                            <label htmlFor="moveAssets" className="text-[10px] font-bold text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+                                                Chuyển tài sản này sang đầu tư?
+                                                <span className="block font-normal text-gray-400">Nếu không, sẽ tính theo lãi Ngân hàng.</span>
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
                                 
                                 {/* Social Insurance Toggle */}
                                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -283,7 +315,18 @@ const FinancialPlanning: React.FC = () => {
                                         <div>
                                             <p className="text-xs text-green-200 uppercase font-bold">Quỹ cần có (tuổi {retireInputs.retireAge})</p>
                                             <p className="text-lg font-bold text-white">{formatMoney(investResult.requiredAmount)}</p>
-                                            <p className="text-[10px] text-green-100 italic mt-1">*Quỹ nhẹ hơn nhờ lãi suất kép.</p>
+                                            
+                                            {/* Disclaimer about asset movement */}
+                                            {retireInputs.savings > 0 && !moveAssetsToInvestment && (
+                                                <p className="text-[10px] text-green-200 italic mt-1 border-t border-green-500/50 pt-1">
+                                                    *Lưu ý: Tài sản {formatMoney(retireInputs.savings)} hiện tại vẫn tính lãi ngân hàng ({retireInputs.savingsRate}%).
+                                                </p>
+                                            )}
+                                            {retireInputs.savings > 0 && moveAssetsToInvestment && (
+                                                <p className="text-[10px] text-green-200 italic mt-1 border-t border-green-500/50 pt-1">
+                                                    *Đã tính: Chuyển {formatMoney(retireInputs.savings)} sang đầu tư ({retireInputs.investmentRate}%).
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -399,6 +442,9 @@ const FinancialPlanning: React.FC = () => {
                                                 <span className="text-gray-500">🔸 Phương án A (Ngân hàng - {retireInputs.savingsRate}%):</span> Vì tiền sinh lời chậm, anh/chị phải tự "cày cuốc" vất vả hơn. Cần để dành tới <strong>{formatMoney(bankResult.monthlySavingNeeded || 0)}/tháng</strong>. Con số này có ảnh hưởng đến chi tiêu gia đình hiện tại không ạ?
                                                 <br/><br/>
                                                 <span className="text-green-600 font-bold">🔹 Phương án B (Đầu tư - {retireInputs.investmentRate}%):</span> Nhờ lãi suất kép làm việc thay anh/chị, gánh nặng giảm đi một nửa. Anh/chị chỉ cần tiết kiệm <strong>{formatMoney(investResult.monthlySavingNeeded || 0)}/tháng</strong> thôi."
+                                                {retireInputs.savings > 0 && !moveAssetsToInvestment && (
+                                                    <span className="block mt-2 text-xs text-gray-500">*Lưu ý: Em vẫn đang tính khoản {formatMoney(retireInputs.savings)} hiện tại của anh chị tiếp tục gửi ngân hàng cho an toàn, chỉ khoản tiết kiệm mới hàng tháng mới mang đi đầu tư.</span>
+                                                )}
                                             </p>
                                         </div>
 

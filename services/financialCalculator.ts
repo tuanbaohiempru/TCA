@@ -33,9 +33,10 @@ export const calculateRetirement = (
     inflationRate: number, 
     investmentRate: number, 
     currentSavings: number,
-    socialInsurance?: {
-        hasSI: boolean;
-        salaryForSI: number; 
+    options?: {
+        hasSI?: boolean;
+        salaryForSI?: number;
+        existingAssetRate?: number; // NEW: Rate specific for existing lump sum
     }
 ): PlanResult => {
     // 0. Validate Inputs
@@ -49,9 +50,9 @@ export const calculateRetirement = (
     
     // --- SOCIAL INSURANCE LOGIC ---
     let futureMonthlyPension = 0;
-    if (socialInsurance?.hasSI && socialInsurance.salaryForSI > 0) {
+    if (options?.hasSI && options.salaryForSI && options.salaryForSI > 0) {
         // Giả định: Lương cơ sở tăng theo lạm phát, hưởng 60%
-        const futureSalaryBasis = FV(socialInsurance.salaryForSI, safeInflation, yearsToRetire);
+        const futureSalaryBasis = FV(options.salaryForSI, safeInflation, yearsToRetire);
         futureMonthlyPension = futureSalaryBasis * 0.60;
     }
 
@@ -61,17 +62,14 @@ export const calculateRetirement = (
 
     // 2. Tính Tổng quỹ hưu cần có (PV Annuity)
     // Real Rate: Lãi suất thực khi về hưu (Lãi gửi ngân hàng - Lạm phát)
-    // Giả định khi về hưu chỉ gửi tiết kiệm an toàn (~ lạm phát + 1-2%)
-    // Để an toàn cho phép tính, nếu Invest <= Inflation, Real Rate sẽ âm hoặc 0.
-    // Tuy nhiên công thức Real Rate chuẩn: (1+i)/(1+r) - 1. 
-    // Ở đây ta dùng công thức Fisher rút gọn cho dễ hiểu hoặc công thức chuẩn.
-    // Dùng công thức chuẩn:
     const realRate = ((1 + safeInvest) / (1 + safeInflation)) - 1;
     
     const totalFundNeeded = PV_Annuity(netAnnualNeed, realRate, yearsInRetirement);
 
     // 3. Tài sản đã có (FV)
-    const futureSavings = FV(currentSavings, safeInvest, yearsToRetire);
+    // FIX: Use existingAssetRate if provided, otherwise use the general investmentRate
+    const assetRate = options?.existingAssetRate !== undefined ? options.existingAssetRate : safeInvest;
+    const futureSavings = FV(currentSavings, assetRate, yearsToRetire);
 
     // 4. Thiếu hụt
     const shortfall = Math.max(0, totalFundNeeded - futureSavings);
@@ -105,7 +103,8 @@ export const calculateRetirement = (
             estimatedPension: futureMonthlyPension, 
             netMonthlyNeeded,
             futureAnnualExpense: netAnnualNeed,
-            realRate: realRate * 100
+            realRate: realRate * 100,
+            futureSavings // Return for debug/display
         }
     };
 };

@@ -110,15 +110,30 @@ export const calculateRetirement = (
 };
 
 export const calculateProtection = (
-    annualIncome: number,
+    monthlyIncome: number,
     supportYears: number, 
     existingCover: number, 
-    loans: number, 
-    emergencyFund: number 
+    loans: number,
+    emergencyFund: number = 0 
 ): PlanResult => {
-    const incomeProtectionNeeded = annualIncome * supportYears;
-    const totalNeeded = incomeProtectionNeeded + loans + emergencyFund;
+    // 1. Quỹ thay thế thu nhập (Income Replacement)
+    const incomeProtectionNeeded = monthlyIncome * 12 * supportYears;
+    
+    // 2. Quỹ trả nợ (Debt Coverage)
+    const debtCoverage = loans;
+
+    // 3. Quỹ khẩn cấp (Emergency Fund - usually 6 months expense, optional input)
+    const emergencyNeeded = emergencyFund;
+
+    // Total
+    const totalNeeded = incomeProtectionNeeded + debtCoverage + emergencyNeeded;
+    
+    // Shortfall
     const shortfall = Math.max(0, totalNeeded - existingCover);
+
+    // For Protection, "Monthly Saving" is the fee to buy insurance. 
+    // We don't calculate saving to reach the goal, we calculate the SUM ASSURED needed.
+    // So monthlySavingNeeded here is irrelevant/zero in this context.
 
     return {
         goal: FinancialGoal.PROTECTION,
@@ -128,8 +143,9 @@ export const calculateProtection = (
         monthlySavingNeeded: 0, 
         details: {
             incomeProtectionNeeded,
-            loans,
-            supportYears
+            debtCoverage,
+            supportYears,
+            monthlyIncome
         }
     };
 };

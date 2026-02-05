@@ -2,18 +2,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
-import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
+import { calculateRetirement, calculateEducation, calculateProtection } from '../services/financialCalculator';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, CartesianGrid } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
-    const [activeTab, setActiveTab] = useState<'retirement' | 'education' | 'compound'>('retirement');
+    const [activeTab, setActiveTab] = useState<'retirement' | 'education' | 'protection'>('retirement');
 
     // --- EFFECT: DEEP LINKING ---
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const tabParam = params.get('tab');
-        if (tabParam && ['retirement', 'education', 'compound'].includes(tabParam)) {
+        if (tabParam && ['retirement', 'education', 'protection'].includes(tabParam)) {
             setActiveTab(tabParam as any);
         }
     }, [location.search]);
@@ -48,9 +48,13 @@ const FinancialPlanning: React.FC = () => {
         schoolType: 'public'
     });
 
-    // Compound State
-    const [compoundInputs, setCompoundInputs] = useState({
-        principal: 100000000, monthlyAdd: 5000000, rate: 8, years: 15
+    // Protection State (Income Protection)
+    const [protectInputs, setProtectInputs] = useState({
+        monthlyIncome: 30000000, // Thu nhập người trụ cột
+        supportYears: 10, // Số năm cần bảo vệ
+        loans: 500000000, // Nợ ngân hàng
+        existingInsurance: 0, // Mệnh giá BHNT đã có
+        existingSavings: 100000000 // Tiền mặt khẩn cấp
     });
 
     const [showScript, setShowScript] = useState(false);
@@ -101,21 +105,12 @@ const FinancialPlanning: React.FC = () => {
         eduInputs.currentSavings
     ), [eduInputs]);
 
-    const compoundResult = useMemo(() => {
-        let total = compoundInputs.principal;
-        const r = compoundInputs.rate / 100 / 12;
-        const n = compoundInputs.years * 12;
-        let totalPrincipal = compoundInputs.principal + (compoundInputs.monthlyAdd * n);
-        
-        for (let i = 0; i < n; i++) {
-            total = (total + compoundInputs.monthlyAdd) * (1 + r);
-        }
-        return {
-            total: Math.round(total),
-            totalPrincipal,
-            interest: Math.round(total - totalPrincipal)
-        };
-    }, [compoundInputs]);
+    const protectResult = useMemo(() => calculateProtection(
+        protectInputs.monthlyIncome,
+        protectInputs.supportYears,
+        protectInputs.existingInsurance + protectInputs.existingSavings,
+        protectInputs.loans
+    ), [protectInputs]);
 
     // --- CHART DATA ---
     const comparisonData = useMemo(() => {
@@ -141,10 +136,6 @@ const FinancialPlanning: React.FC = () => {
     // Education Chart: Principal vs Interest
     const eduChartData = useMemo(() => {
         if (activeTab === 'education' && eduResult.shortfall > 0) {
-            // Logic: Total needed is calculated. 
-            // The monthly saving needed is designed to reach this shortfall.
-            // So Total Contribution = MonthlySaving * 12 * Years
-            // Interest Earned = Shortfall (Target) - Total Contribution
             const months = eduResult.details.yearsToUni * 12;
             const totalContribution = (eduResult.monthlySavingNeeded || 0) * months;
             const interestEarned = Math.max(0, eduResult.shortfall - totalContribution);
@@ -159,6 +150,20 @@ const FinancialPlanning: React.FC = () => {
         }
         return [];
     }, [activeTab, eduResult]);
+
+    // Protection Chart: Coverage vs Gap
+    const protectChartData = useMemo(() => {
+        if (activeTab === 'protection') {
+            return [
+                {
+                    name: 'Bảo vệ Thu nhập',
+                    "Đã chuẩn bị": protectResult.currentAmount,
+                    "Thiếu hụt (Gap)": protectResult.shortfall,
+                }
+            ];
+        }
+        return [];
+    }, [activeTab, protectResult]);
 
     // --- RENDER HELPERS ---
     const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
@@ -268,7 +273,7 @@ const FinancialPlanning: React.FC = () => {
             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto">
                 <button onClick={() => setActiveTab('retirement')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'retirement' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-umbrella-beach mr-2"></i>Hưu trí an nhàn</button>
                 <button onClick={() => setActiveTab('education')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'education' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-graduation-cap mr-2"></i>Quỹ học vấn</button>
-                <button onClick={() => setActiveTab('compound')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'compound' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-chart-line mr-2"></i>Lãi kép (Đầu tư)</button>
+                <button onClick={() => setActiveTab('protection')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'protection' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-shield-alt mr-2"></i>Bảo vệ Thu nhập</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -401,15 +406,31 @@ const FinancialPlanning: React.FC = () => {
                             </div>
                         )}
 
-                        {activeTab === 'compound' && (
+                        {activeTab === 'protection' && (
                             <div className="space-y-4 animate-fade-in">
-                                <div><label className="label-text">Số vốn ban đầu</label><CurrencyInput className="input-field font-bold" value={compoundInputs.principal} onChange={v => setCompoundInputs({...compoundInputs, principal: v})} /></div>
-                                <div><label className="label-text">Tiết kiệm thêm mỗi tháng</label><CurrencyInput className="input-field" value={compoundInputs.monthlyAdd} onChange={v => setCompoundInputs({...compoundInputs, monthlyAdd: v})} /></div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="label-text">Lãi suất (%/năm)</label><input type="number" className="input-field" value={compoundInputs.rate} onChange={e => setCompoundInputs({...compoundInputs, rate: Number(e.target.value)})} /></div>
-                                    <div><label className="label-text">Thời gian (Năm)</label><input type="number" className="input-field" value={compoundInputs.years} onChange={e => setCompoundInputs({...compoundInputs, years: Number(e.target.value)})} /></div>
+                                <div>
+                                    <label className="label-text text-blue-600">Thu nhập người trụ cột (Tháng)</label>
+                                    <CurrencyInput className="input-field font-bold" value={protectInputs.monthlyIncome} onChange={v => setProtectInputs({...protectInputs, monthlyIncome: v})} />
                                 </div>
-                                <input type="range" min="1" max="30" value={compoundInputs.years} onChange={e => setCompoundInputs({...compoundInputs, years: Number(e.target.value)})} className="w-full accent-green-600 cursor-pointer h-1.5 bg-gray-200 rounded-lg appearance-none" />
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="label-text">Số năm cần bảo vệ (Nuôi con)</label>
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{protectInputs.supportYears} năm</span>
+                                    </div>
+                                    <input type="range" min="5" max="25" value={protectInputs.supportYears} onChange={e => setProtectInputs({...protectInputs, supportYears: Number(e.target.value)})} className="w-full accent-blue-600 cursor-pointer h-1.5 bg-gray-200 rounded-lg appearance-none" />
+                                </div>
+                                <div>
+                                    <label className="label-text text-red-600">Dư nợ hiện tại (Vay NH, Vay ngoài)</label>
+                                    <CurrencyInput className="input-field font-bold text-red-600" value={protectInputs.loans} onChange={v => setProtectInputs({...protectInputs, loans: v})} />
+                                </div>
+                                <div className="border-t border-dashed border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                    <label className="label-text">Mệnh giá BHNT đang có</label>
+                                    <CurrencyInput className="input-field" value={protectInputs.existingInsurance} onChange={v => setProtectInputs({...protectInputs, existingInsurance: v})} />
+                                </div>
+                                <div>
+                                    <label className="label-text">Tài sản thanh khoản (Tiền mặt/Vàng)</label>
+                                    <CurrencyInput className="input-field" value={protectInputs.existingSavings} onChange={v => setProtectInputs({...protectInputs, existingSavings: v})} />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -615,18 +636,95 @@ const FinancialPlanning: React.FC = () => {
                             )}
                         </div>
                     ) : (
-                        // COMPOUND VIEW (Keep simple)
-                        <div className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
-                            <div className="flex justify-between items-center z-10 relative">
-                                <div>
-                                    <p className="text-indigo-200 font-bold text-sm uppercase tracking-widest mb-1">Tổng tài sản tích lũy</p>
-                                    <h2 className="text-4xl font-black text-white">{formatMoney(compoundResult.total)}</h2>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-indigo-200 text-xs">Tổng gốc: {formatMoney(compoundResult.totalPrincipal)}</p>
-                                    <p className="text-green-300 font-bold text-lg">+ {formatMoney(compoundResult.interest)} (Lãi)</p>
+                        // PROTECTION VIEW (Replaced Compound)
+                        <div className="space-y-6">
+                            {/* PROTECTION HERO */}
+                            <div className="bg-gradient-to-r from-red-600 to-red-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-umbrella text-8xl"></i></div>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div>
+                                        <p className="text-red-200 font-bold text-sm uppercase tracking-widest mb-1">Tổng Quỹ Dự Phòng Cần Có</p>
+                                        <h2 className="text-4xl font-black mb-2">{formatMoney(protectResult.requiredAmount)}</h2>
+                                        <p className="text-sm text-red-100 opacity-90">Bảo vệ thu nhập {protectInputs.supportYears} năm & Che chắn khoản nợ.</p>
+                                    </div>
+                                    <div className={`bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-center min-w-[150px] ${protectResult.shortfall > 0 ? 'border-l-4 border-l-yellow-400' : 'border-l-4 border-l-green-400'}`}>
+                                        <p className="text-xs font-bold text-red-100 uppercase">Thiếu hụt (Gap)</p>
+                                        <p className="text-xl font-black text-white">{formatMoney(protectResult.shortfall)}</p>
+                                        <p className="text-[10px] text-red-200 mt-1">{protectResult.shortfall > 0 ? 'Cần bổ sung ngay' : 'Đã an toàn'}</p>
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* PROTECTION BREAKDOWN */}
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase flex items-center gap-2">
+                                    <i className="fas fa-list-ul text-red-500"></i> Cơ cấu Quỹ Trụ cột
+                                </h3>
+                                <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                        <div className="font-bold text-blue-800 dark:text-blue-300 mb-1">1. Thay thế thu nhập (Income Replacement)</div>
+                                        <div className="flex justify-between">
+                                            <span>{formatMoney(protectInputs.monthlyIncome)} x 12 tháng x {protectInputs.supportYears} năm</span>
+                                            <span className="font-bold text-lg text-right">{formatMoney(protectResult.details.incomeProtectionNeeded)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                                        <div className="font-bold text-red-800 dark:text-red-300 mb-1">2. Trả nợ thay (Debt Hedge)</div>
+                                        <div className="flex justify-between items-center">
+                                            <span>Khoản vay ngân hàng/ngoài:</span>
+                                            <span className="font-bold text-lg">{formatMoney(protectResult.details.debtCoverage)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/30">
+                                        <div className="font-bold text-green-800 dark:text-green-300 mb-1">3. Tài sản đảm bảo hiện có</div>
+                                        <div className="flex justify-between">
+                                            <span>BHNT + Tiền mặt + Vàng:</span>
+                                            <span className="font-bold text-lg text-green-600"> - {formatMoney(protectResult.currentAmount)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* PROTECTION CHART */}
+                            {protectChartData.length > 0 && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase">Biểu đồ Trách nhiệm Tài chính</h3>
+                                    <div className="h-40 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={protectChartData} layout="vertical" barSize={40}>
+                                                <XAxis type="number" hide />
+                                                <YAxis type="category" dataKey="name" hide />
+                                                <Tooltip formatter={(value: number) => formatMoney(value)} cursor={{fill: 'transparent'}} />
+                                                <Legend verticalAlign="top" height={36}/>
+                                                <Bar dataKey="Đã chuẩn bị" stackId="a" fill="#10b981" radius={[4, 0, 0, 4]} />
+                                                <Bar dataKey="Thiếu hụt (Gap)" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* PROTECTION SCRIPT */}
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowScript(!showScript)} className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/30 px-3 py-2 rounded-lg transition">
+                                    <i className={`fas ${showScript ? 'fa-eye-slash' : 'fa-comment-dots'}`}></i> 
+                                    {showScript ? 'Ẩn kịch bản' : 'Hiện kịch bản tư vấn'}
+                                </button>
+                            </div>
+                            
+                            {showScript && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-2xl border-l-4 border-red-500 shadow-lg animate-fade-in relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-print text-6xl text-red-500"></i></div>
+                                    <h3 className="font-bold text-lg mb-4 text-red-700 dark:text-red-300 flex items-center gap-2"><i className="fas fa-microphone-alt"></i> Kịch bản: Máy in tiền</h3>
+                                    <div className="space-y-4 text-base text-gray-800 dark:text-gray-200 leading-loose">
+                                        <p className="italic">"Thưa anh/chị, anh/chị chính là 'Máy in tiền' của gia đình, đều đặn mang về <strong>{formatMoney(protectInputs.monthlyIncome)}/tháng</strong> để lo cơm áo gạo tiền và trả khoản nợ {formatMoney(protectInputs.loans)}."</p>
+                                        <p className="italic">"Nếu chẳng may cái máy này hỏng vĩnh viễn (rủi ro), thì ai sẽ là người in ra số tiền <strong>{formatMoney(protectResult.requiredAmount)}</strong> này để nuôi con trong {protectInputs.supportYears} năm tới và trả hết nợ nần?"</p>
+                                        <p className="italic font-bold text-red-600">"Chỉ với khoảng 2-3 triệu/tháng thôi, em sẽ giúp anh chị xây dựng ngay một 'Máy in tiền dự phòng' trị giá {formatMoney(protectResult.shortfall)}, hoạt động ngay lập tức khi cần thiết."</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

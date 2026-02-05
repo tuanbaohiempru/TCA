@@ -2,18 +2,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
-import { calculateRetirement, calculateEducation, calculateProtection } from '../services/financialCalculator';
+import { calculateRetirement, calculateEducation, calculateProtection, calculateHealthFund, calculateLegacyFund } from '../services/financialCalculator';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, CartesianGrid } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
-    const [activeTab, setActiveTab] = useState<'retirement' | 'education' | 'protection'>('retirement');
+    const [activeTab, setActiveTab] = useState<'retirement' | 'education' | 'protection' | 'health' | 'legacy'>('retirement');
 
     // --- EFFECT: DEEP LINKING ---
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const tabParam = params.get('tab');
-        if (tabParam && ['retirement', 'education', 'protection'].includes(tabParam)) {
+        if (tabParam && ['retirement', 'education', 'protection', 'health', 'legacy'].includes(tabParam)) {
             setActiveTab(tabParam as any);
         }
     }, [location.search]);
@@ -55,6 +55,21 @@ const FinancialPlanning: React.FC = () => {
         loans: 500000000, // Nợ ngân hàng
         existingInsurance: 0, // Mệnh giá BHNT đã có
         existingSavings: 100000000 // Tiền mặt khẩn cấp
+    });
+
+    // Health State
+    const [healthInputs, setHealthInputs] = useState({
+        treatmentCost: 1000000000, // Chi phí chữa bệnh dự kiến (Vd: K)
+        monthlyIncome: 30000000, // Thu nhập hiện tại
+        recoveryYears: 3, // Số năm nghỉ làm chữa bệnh
+        existingHealthCover: 0 // Đã có BH Bệnh hiểm nghèo?
+    });
+
+    // Legacy State
+    const [legacyInputs, setLegacyInputs] = useState({
+        numberOfHeirs: 2,
+        amountPerHeir: 2000000000, // Muốn để lại mỗi người 2 tỷ
+        currentAssets: 1000000000 // Tài sản hiện có (BĐS, Vàng...)
     });
 
     const [showScript, setShowScript] = useState(false);
@@ -112,6 +127,19 @@ const FinancialPlanning: React.FC = () => {
         protectInputs.loans
     ), [protectInputs]);
 
+    const healthResult = useMemo(() => calculateHealthFund(
+        healthInputs.treatmentCost,
+        healthInputs.recoveryYears,
+        healthInputs.monthlyIncome,
+        healthInputs.existingHealthCover
+    ), [healthInputs]);
+
+    const legacyResult = useMemo(() => calculateLegacyFund(
+        legacyInputs.numberOfHeirs,
+        legacyInputs.amountPerHeir,
+        legacyInputs.currentAssets
+    ), [legacyInputs]);
+
     // --- CHART DATA ---
     const comparisonData = useMemo(() => {
         if (activeTab === 'retirement') {
@@ -164,6 +192,25 @@ const FinancialPlanning: React.FC = () => {
         }
         return [];
     }, [activeTab, protectResult]);
+
+    const healthChartData = useMemo(() => {
+        if (activeTab === 'health') {
+            return [
+                { name: 'Chi phí Y tế', "Giá trị": healthResult.details.medicalCost, fill: '#ef4444' },
+                { name: 'Mất thu nhập', "Giá trị": healthResult.details.incomeLoss, fill: '#f97316' },
+            ]
+        }
+        return [];
+    }, [activeTab, healthResult]);
+
+    const legacyChartData = useMemo(() => {
+        if (activeTab === 'legacy') {
+            return [
+                { name: 'Di sản', "Tài sản hiện có": legacyResult.currentAmount, "Bảo hiểm bổ sung": legacyResult.shortfall }
+            ]
+        }
+        return [];
+    }, [activeTab, legacyResult]);
 
     // --- RENDER HELPERS ---
     const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
@@ -270,10 +317,12 @@ const FinancialPlanning: React.FC = () => {
             </header>
 
             {/* TAB SELECTOR */}
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto">
-                <button onClick={() => setActiveTab('retirement')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'retirement' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-umbrella-beach mr-2"></i>Hưu trí an nhàn</button>
-                <button onClick={() => setActiveTab('education')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'education' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-graduation-cap mr-2"></i>Quỹ học vấn</button>
-                <button onClick={() => setActiveTab('protection')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'protection' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-shield-alt mr-2"></i>Bảo vệ Thu nhập</button>
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl overflow-x-auto gap-1">
+                <button onClick={() => setActiveTab('retirement')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'retirement' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-umbrella-beach mr-2"></i>Hưu trí</button>
+                <button onClick={() => setActiveTab('education')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'education' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-graduation-cap mr-2"></i>Học vấn</button>
+                <button onClick={() => setActiveTab('protection')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'protection' ? 'bg-white dark:bg-pru-card text-pru-red shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-shield-alt mr-2"></i>Thu nhập</button>
+                <button onClick={() => setActiveTab('health')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'health' ? 'bg-white dark:bg-pru-card text-teal-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-heartbeat mr-2"></i>Y tế</button>
+                <button onClick={() => setActiveTab('legacy')} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition ${activeTab === 'legacy' ? 'bg-white dark:bg-pru-card text-yellow-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}><i className="fas fa-crown mr-2"></i>Thừa kế</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -430,6 +479,52 @@ const FinancialPlanning: React.FC = () => {
                                 <div>
                                     <label className="label-text">Tài sản thanh khoản (Tiền mặt/Vàng)</label>
                                     <CurrencyInput className="input-field" value={protectInputs.existingSavings} onChange={v => setProtectInputs({...protectInputs, existingSavings: v})} />
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'health' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div>
+                                    <label className="label-text text-teal-600">Chi phí điều trị (Dự kiến)</label>
+                                    <CurrencyInput className="input-field font-bold" value={healthInputs.treatmentCost} onChange={v => setHealthInputs({...healthInputs, treatmentCost: v})} />
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={() => setHealthInputs({...healthInputs, treatmentCost: 500000000})} className="text-[10px] border rounded px-2 py-1 hover:bg-gray-100">500tr</button>
+                                        <button onClick={() => setHealthInputs({...healthInputs, treatmentCost: 1000000000})} className="text-[10px] border rounded px-2 py-1 hover:bg-gray-100">1 Tỷ</button>
+                                        <button onClick={() => setHealthInputs({...healthInputs, treatmentCost: 2000000000})} className="text-[10px] border rounded px-2 py-1 hover:bg-gray-100">2 Tỷ</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="label-text">Thu nhập tháng (Mất đi khi nghỉ)</label>
+                                    <CurrencyInput className="input-field" value={healthInputs.monthlyIncome} onChange={v => setHealthInputs({...healthInputs, monthlyIncome: v})} />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="label-text">Số năm nghỉ dưỡng bệnh</label>
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{healthInputs.recoveryYears} năm</span>
+                                    </div>
+                                    <input type="range" min="1" max="5" step="0.5" value={healthInputs.recoveryYears} onChange={e => setHealthInputs({...healthInputs, recoveryYears: Number(e.target.value)})} className="w-full accent-teal-600 cursor-pointer h-1.5 bg-gray-200 rounded-lg appearance-none" />
+                                </div>
+                                <div className="border-t border-dashed border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                    <label className="label-text">Bảo hiểm Bệnh hiểm nghèo đã có</label>
+                                    <CurrencyInput className="input-field" value={healthInputs.existingHealthCover} onChange={v => setHealthInputs({...healthInputs, existingHealthCover: v})} />
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'legacy' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div>
+                                    <label className="label-text text-yellow-600">Số người thừa kế</label>
+                                    <input type="number" className="input-field font-bold" value={legacyInputs.numberOfHeirs} onChange={e => setLegacyInputs({...legacyInputs, numberOfHeirs: Number(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <label className="label-text">Mong muốn để lại / người</label>
+                                    <CurrencyInput className="input-field font-bold text-yellow-600" value={legacyInputs.amountPerHeir} onChange={v => setLegacyInputs({...legacyInputs, amountPerHeir: v})} />
+                                </div>
+                                <div className="border-t border-dashed border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                    <label className="label-text">Tài sản hiện có (BĐS, Tiền mặt...)</label>
+                                    <CurrencyInput className="input-field" value={legacyInputs.currentAssets} onChange={v => setLegacyInputs({...legacyInputs, currentAssets: v})} />
                                 </div>
                             </div>
                         )}
@@ -635,7 +730,7 @@ const FinancialPlanning: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : activeTab === 'protection' ? (
                         // PROTECTION VIEW (Replaced Compound)
                         <div className="space-y-6">
                             {/* PROTECTION HERO */}
@@ -722,6 +817,136 @@ const FinancialPlanning: React.FC = () => {
                                         <p className="italic">"Thưa anh/chị, anh/chị chính là 'Máy in tiền' của gia đình, đều đặn mang về <strong>{formatMoney(protectInputs.monthlyIncome)}/tháng</strong> để lo cơm áo gạo tiền và trả khoản nợ {formatMoney(protectInputs.loans)}."</p>
                                         <p className="italic">"Nếu chẳng may cái máy này hỏng vĩnh viễn (rủi ro), thì ai sẽ là người in ra số tiền <strong>{formatMoney(protectResult.requiredAmount)}</strong> này để nuôi con trong {protectInputs.supportYears} năm tới và trả hết nợ nần?"</p>
                                         <p className="italic font-bold text-red-600">"Chỉ với khoảng 2-3 triệu/tháng thôi, em sẽ giúp anh chị xây dựng ngay một 'Máy in tiền dự phòng' trị giá {formatMoney(protectResult.shortfall)}, hoạt động ngay lập tức khi cần thiết."</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : activeTab === 'health' ? (
+                        // HEALTH VIEW
+                        <div className="space-y-6">
+                            <div className="bg-gradient-to-r from-teal-600 to-teal-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-hospital text-8xl"></i></div>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div>
+                                        <p className="text-teal-200 font-bold text-sm uppercase tracking-widest mb-1">Quỹ Y tế & Bệnh hiểm nghèo</p>
+                                        <h2 className="text-4xl font-black mb-2">{formatMoney(healthResult.requiredAmount)}</h2>
+                                        <p className="text-sm text-teal-100 opacity-90">Chi phí điều trị & Bù đắp {healthInputs.recoveryYears} năm thu nhập</p>
+                                    </div>
+                                    <div className={`bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-center min-w-[150px] ${healthResult.shortfall > 0 ? 'border-l-4 border-l-yellow-400' : 'border-l-4 border-l-green-400'}`}>
+                                        <p className="text-xs font-bold text-teal-100 uppercase">Cần chuẩn bị thêm</p>
+                                        <p className="text-xl font-black text-white">{formatMoney(healthResult.shortfall)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase flex items-center gap-2">
+                                    <i className="fas fa-microscope text-teal-500"></i> Phân tích tổn thất
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30">
+                                        <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase mb-1">1. Chi phí điều trị (Mất đi)</p>
+                                        <p className="text-lg font-black text-red-800 dark:text-red-300">{formatMoney(healthResult.details.medicalCost)}</p>
+                                        <p className="text-[10px] text-gray-500 mt-1 italic">Tiền trả cho bệnh viện (Thuốc, Phẫu thuật)</p>
+                                    </div>
+                                    <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/30">
+                                        <p className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase mb-1">2. Thu nhập mất đi (Không làm ra)</p>
+                                        <p className="text-lg font-black text-orange-800 dark:text-orange-300">{formatMoney(healthResult.details.incomeLoss)}</p>
+                                        <p className="text-[10px] text-gray-500 mt-1 italic">Nghỉ làm {healthInputs.recoveryYears} năm để chữa bệnh</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-gray-500 uppercase">Biểu đồ xói mòn tài sản</span>
+                                    </div>
+                                    <div className="h-40 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={healthChartData} layout="vertical" barSize={30}>
+                                                <XAxis type="number" hide />
+                                                <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 10}} />
+                                                <Tooltip formatter={(value: number) => formatMoney(value)} cursor={{fill: 'transparent'}} />
+                                                <Bar dataKey="Giá trị" radius={[0, 4, 4, 0]}>
+                                                    {healthChartData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowScript(!showScript)} className="text-sm font-bold text-teal-600 dark:text-teal-400 flex items-center gap-2 hover:bg-teal-50 dark:hover:bg-teal-900/30 px-3 py-2 rounded-lg transition">
+                                    <i className={`fas ${showScript ? 'fa-eye-slash' : 'fa-comment-dots'}`}></i> 
+                                    {showScript ? 'Ẩn kịch bản' : 'Hiện kịch bản tư vấn'}
+                                </button>
+                            </div>
+                            
+                            {showScript && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-2xl border-l-4 border-teal-500 shadow-lg animate-fade-in relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-procedures text-6xl text-teal-500"></i></div>
+                                    <h3 className="font-bold text-lg mb-4 text-teal-700 dark:text-teal-300 flex items-center gap-2"><i className="fas fa-microphone-alt"></i> Kịch bản: Chiếc giường đắt nhất</h3>
+                                    <div className="space-y-4 text-base text-gray-800 dark:text-gray-200 leading-loose">
+                                        <p className="italic">"Thưa anh/chị, người ta thường nói chiếc giường đắt nhất thế giới là giường bệnh. Khi nằm đó, không chỉ tốn tiền chữa trị <strong>({formatMoney(healthResult.details.medicalCost)})</strong> mà thu nhập của mình cũng dừng lại."</p>
+                                        <p className="italic">"Anh/chị muốn nằm trên chiếc giường do Bảo hiểm chi trả, hay chiếc giường do chính tiền tiết kiệm cả đời của mình chi trả?"</p>
+                                        <p className="italic font-bold text-teal-600">"Quỹ dự phòng {formatMoney(healthResult.requiredAmount)} này sẽ giúp anh/chị an tâm chữa trị mà không ảnh hưởng đến kinh tế gia đình."</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        // LEGACY VIEW
+                        <div className="space-y-6">
+                            <div className="bg-gradient-to-r from-yellow-600 to-yellow-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-crown text-8xl"></i></div>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div>
+                                        <p className="text-yellow-200 font-bold text-sm uppercase tracking-widest mb-1">Quỹ Di sản Thừa kế (Miễn thuế)</p>
+                                        <h2 className="text-4xl font-black mb-2">{formatMoney(legacyResult.requiredAmount)}</h2>
+                                        <p className="text-sm text-yellow-100 opacity-90">Chuyển giao cho {legacyInputs.numberOfHeirs} người thân yêu ({formatMoney(legacyInputs.amountPerHeir)}/người)</p>
+                                    </div>
+                                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-center min-w-[150px]">
+                                        <p className="text-xs font-bold text-yellow-100 uppercase">Cần tạo thêm</p>
+                                        <p className="text-xl font-black text-white">{formatMoney(legacyResult.shortfall)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase flex items-center gap-2">
+                                    <i className="fas fa-balance-scale text-yellow-500"></i> Cấu trúc tài sản chuyển giao
+                                </h3>
+                                <div className="h-40 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={legacyChartData} layout="vertical" barSize={40}>
+                                            <XAxis type="number" hide />
+                                            <YAxis type="category" dataKey="name" hide />
+                                            <Tooltip formatter={(value: number) => formatMoney(value)} cursor={{fill: 'transparent'}} />
+                                            <Legend verticalAlign="top" height={36}/>
+                                            <Bar dataKey="Tài sản hiện có" stackId="a" fill="#9ca3af" radius={[4, 0, 0, 4]} />
+                                            <Bar dataKey="Bảo hiểm bổ sung" stackId="a" fill="#eab308" radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <p className="text-xs text-center text-gray-500 mt-2 italic">Tạo ra tài sản tiền mặt ngay tức thì (Instant Estate Creation).</p>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowScript(!showScript)} className="text-sm font-bold text-yellow-600 dark:text-yellow-400 flex items-center gap-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 px-3 py-2 rounded-lg transition">
+                                    <i className={`fas ${showScript ? 'fa-eye-slash' : 'fa-comment-dots'}`}></i> 
+                                    {showScript ? 'Ẩn kịch bản' : 'Hiện kịch bản tư vấn'}
+                                </button>
+                            </div>
+                            
+                            {showScript && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-2xl border-l-4 border-yellow-500 shadow-lg animate-fade-in relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-hand-holding-heart text-6xl text-yellow-500"></i></div>
+                                    <h3 className="font-bold text-lg mb-4 text-yellow-700 dark:text-yellow-300 flex items-center gap-2"><i className="fas fa-microphone-alt"></i> Kịch bản: Di sản tình yêu</h3>
+                                    <div className="space-y-4 text-base text-gray-800 dark:text-gray-200 leading-loose">
+                                        <p className="italic">"Thưa anh/chị, tài sản là thứ chúng ta vất vả cả đời mới có được. Nhưng việc chuyển giao nó cho thế hệ sau một cách trọn vẹn, công bằng và không tranh chấp mới là nghệ thuật."</p>
+                                        <p className="italic">"Thông qua bảo hiểm nhân thọ, anh chị có thể tạo ra ngay một 'Kho tiền mặt' trị giá <strong>{formatMoney(legacyResult.requiredAmount)}</strong> để trao tận tay cho những người mình thương yêu nhất, miễn thuế và không cần di chúc phức tạp."</p>
+                                        <p className="italic font-bold text-yellow-600">"Đây là cách anh chị nói 'Bố/Mẹ yêu con' ngay cả khi không còn ở bên cạnh."</p>
                                     </div>
                                 </div>
                             )}

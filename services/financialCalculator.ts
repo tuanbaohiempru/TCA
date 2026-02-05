@@ -131,10 +131,6 @@ export const calculateProtection = (
     // Shortfall
     const shortfall = Math.max(0, totalNeeded - existingCover);
 
-    // For Protection, "Monthly Saving" is the fee to buy insurance. 
-    // We don't calculate saving to reach the goal, we calculate the SUM ASSURED needed.
-    // So monthlySavingNeeded here is irrelevant/zero in this context.
-
     return {
         goal: FinancialGoal.PROTECTION,
         requiredAmount: totalNeeded,
@@ -204,6 +200,56 @@ export const calculateEducation = (
             uniDuration,
             realRate: realRate * 100, // Export for UI
             totalFundNeeded // Export for UI
+        }
+    };
+};
+
+export const calculateHealthFund = (
+    treatmentCost: number, // Chi phí điều trị dự kiến (VNĐ)
+    recoveryYears: number, // Số năm cần nghỉ ngơi (mất thu nhập)
+    monthlyIncome: number, // Thu nhập tháng bị mất
+    existingHealthCover: number // Bảo hiểm bệnh hiểm nghèo đã có
+): PlanResult => {
+    // 1. Chi phí y tế trực tiếp
+    const medicalCost = treatmentCost;
+
+    // 2. Chi phí sinh hoạt (Mất thu nhập)
+    const incomeLoss = monthlyIncome * 12 * recoveryYears;
+
+    const totalNeeded = medicalCost + incomeLoss;
+    const shortfall = Math.max(0, totalNeeded - existingHealthCover);
+
+    return {
+        goal: FinancialGoal.HEALTH,
+        requiredAmount: totalNeeded,
+        currentAmount: existingHealthCover,
+        shortfall: shortfall,
+        monthlySavingNeeded: 0,
+        details: {
+            medicalCost,
+            incomeLoss,
+            recoveryYears
+        }
+    };
+};
+
+export const calculateLegacyFund = (
+    numberOfHeirs: number,
+    amountPerHeir: number,
+    currentAssets: number
+): PlanResult => {
+    const totalLegacyNeeded = numberOfHeirs * amountPerHeir;
+    const shortfall = Math.max(0, totalLegacyNeeded - currentAssets);
+
+    return {
+        goal: FinancialGoal.PROTECTION, // Reusing enum or add LEGACY
+        requiredAmount: totalLegacyNeeded,
+        currentAmount: currentAssets,
+        shortfall: shortfall,
+        monthlySavingNeeded: 0,
+        details: {
+            numberOfHeirs,
+            amountPerHeir
         }
     };
 };

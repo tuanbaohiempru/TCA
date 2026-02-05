@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CurrencyInput } from '../components/Shared';
 import { calculateRetirement, calculateEducation } from '../services/financialCalculator';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, CartesianGrid } from 'recharts';
 
 const FinancialPlanning: React.FC = () => {
     const location = useLocation();
@@ -40,8 +40,12 @@ const FinancialPlanning: React.FC = () => {
 
     // Education State
     const [eduInputs, setEduInputs] = useState({
-        childAge: 5, uniStartAge: 18, duration: 4, annualTuition: 100000000, currentSavings: 50000000, 
-        inflationRate: 5, investmentRate: 7
+        childAge: 5, uniStartAge: 18, duration: 4, 
+        tuition: 50000000, // Học phí
+        livingCost: 50000000, // Sinh hoạt phí
+        currentSavings: 50000000, 
+        inflationRate: 8, investmentRate: 12,
+        schoolType: 'public'
     });
 
     // Compound State
@@ -91,7 +95,7 @@ const FinancialPlanning: React.FC = () => {
         eduInputs.childAge, 
         eduInputs.uniStartAge, 
         eduInputs.duration, 
-        eduInputs.annualTuition, 
+        eduInputs.tuition + eduInputs.livingCost, // Total Annual Cost
         eduInputs.inflationRate / 100, 
         eduInputs.investmentRate / 100, 
         eduInputs.currentSavings
@@ -113,7 +117,7 @@ const FinancialPlanning: React.FC = () => {
         };
     }, [compoundInputs]);
 
-    // --- CHART DATA FOR COMPARISON ---
+    // --- CHART DATA ---
     const comparisonData = useMemo(() => {
         if (activeTab === 'retirement') {
             return [
@@ -133,6 +137,28 @@ const FinancialPlanning: React.FC = () => {
         }
         return [];
     }, [activeTab, bankResult, investResult, retireInputs]);
+
+    // Education Chart: Principal vs Interest
+    const eduChartData = useMemo(() => {
+        if (activeTab === 'education' && eduResult.shortfall > 0) {
+            // Logic: Total needed is calculated. 
+            // The monthly saving needed is designed to reach this shortfall.
+            // So Total Contribution = MonthlySaving * 12 * Years
+            // Interest Earned = Shortfall (Target) - Total Contribution
+            const months = eduResult.details.yearsToUni * 12;
+            const totalContribution = (eduResult.monthlySavingNeeded || 0) * months;
+            const interestEarned = Math.max(0, eduResult.shortfall - totalContribution);
+            
+            return [
+                {
+                    name: 'Cơ cấu Quỹ',
+                    "Vốn gốc của anh/chị": totalContribution,
+                    "Lãi đầu tư sinh ra": interestEarned
+                }
+            ];
+        }
+        return [];
+    }, [activeTab, eduResult]);
 
     // --- RENDER HELPERS ---
     const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
@@ -207,6 +233,26 @@ const FinancialPlanning: React.FC = () => {
                 )}
             </div>
         );
+    };
+
+    const handleSchoolTypeChange = (type: string) => {
+        setEduInputs(prev => {
+            let update = { ...prev, schoolType: type };
+            if (type === 'public') {
+                update.inflationRate = 8;
+                update.tuition = 50000000;
+                update.livingCost = 60000000;
+            } else if (type === 'international') {
+                update.inflationRate = 10;
+                update.tuition = 300000000;
+                update.livingCost = 100000000;
+            } else if (type === 'abroad') {
+                update.inflationRate = 6;
+                update.tuition = 800000000;
+                update.livingCost = 400000000;
+            }
+            return update;
+        });
     };
 
     return (
@@ -316,18 +362,41 @@ const FinancialPlanning: React.FC = () => {
 
                         {activeTab === 'education' && (
                             <div className="space-y-4 animate-fade-in">
-                                {/* Education Inputs */}
+                                {/* School Type Quick Select */}
+                                <div>
+                                    <label className="label-text">Loại hình trường (Gợi ý)</label>
+                                    <select className="input-field font-bold" value={eduInputs.schoolType} onChange={e => handleSchoolTypeChange(e.target.value)}>
+                                        <option value="public">Đại học Công lập (VN)</option>
+                                        <option value="international">ĐH Quốc tế (RMIT/VinUni)</option>
+                                        <option value="abroad">Du học (Mỹ/Úc)</option>
+                                    </select>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="label-text">Tuổi con hiện tại</label><input type="number" className="input-field" value={eduInputs.childAge} onChange={e => setEduInputs({...eduInputs, childAge: Number(e.target.value)})} /></div>
                                     <div><label className="label-text">Tuổi vào ĐH</label><input type="number" className="input-field" value={eduInputs.uniStartAge} onChange={e => setEduInputs({...eduInputs, uniStartAge: Number(e.target.value)})} /></div>
                                 </div>
-                                <div><label className="label-text">Số năm học</label><input type="number" className="input-field" value={eduInputs.duration} onChange={e => setEduInputs({...eduInputs, duration: Number(e.target.value)})} /></div>
-                                <div><label className="label-text">Học phí / năm (Hiện tại)</label><CurrencyInput className="input-field" value={eduInputs.annualTuition} onChange={v => setEduInputs({...eduInputs, annualTuition: v})} /></div>
+                                
+                                <div><label className="label-text">Học phí / năm (Hiện tại)</label><CurrencyInput className="input-field" value={eduInputs.tuition} onChange={v => setEduInputs({...eduInputs, tuition: v})} /></div>
+                                <div><label className="label-text">Sinh hoạt phí / năm (Hiện tại)</label><CurrencyInput className="input-field" value={eduInputs.livingCost} onChange={v => setEduInputs({...eduInputs, livingCost: v})} /></div>
+                                
                                 <div><label className="label-text">Đã tích lũy</label><CurrencyInput className="input-field" value={eduInputs.currentSavings} onChange={v => setEduInputs({...eduInputs, currentSavings: v})} /></div>
                                 
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-xs space-y-2 border border-blue-100 dark:border-blue-900">
-                                    <div className="flex justify-between"><span>Lạm phát giáo dục:</span> <strong>{eduInputs.inflationRate}%</strong></div>
-                                    <div className="flex justify-between"><span>Lãi suất đầu tư:</span> <strong>{eduInputs.investmentRate}%</strong></div>
+                                <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900 space-y-4">
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-xs font-bold text-gray-500">Lạm phát giáo dục:</span>
+                                            <span className="font-bold text-xs text-red-500">{eduInputs.inflationRate}%</span>
+                                        </div>
+                                        <input type="range" min="1" max="15" step="0.5" value={eduInputs.inflationRate} onChange={e => setEduInputs({...eduInputs, inflationRate: Number(e.target.value)})} className="w-full accent-red-500 cursor-pointer h-1 bg-gray-200 rounded-lg appearance-none" />
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-xs font-bold text-gray-500">Lãi suất đầu tư:</span>
+                                            <span className="font-bold text-xs text-green-600">{eduInputs.investmentRate}%</span>
+                                        </div>
+                                        <input type="range" min="5" max="15" step="0.5" value={eduInputs.investmentRate} onChange={e => setEduInputs({...eduInputs, investmentRate: Number(e.target.value)})} className="w-full accent-green-600 cursor-pointer h-1 bg-gray-200 rounded-lg appearance-none" />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -445,31 +514,123 @@ const FinancialPlanning: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                    ) : (
-                        // Default Single View for Education/Compound (Keep as is)
-                        <div className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
-                             {activeTab === 'education' ? (
-                                <div className="relative z-10">
-                                    <p className="text-gray-400 font-bold text-sm uppercase tracking-widest mb-1">Quỹ học vấn cần có</p>
-                                    <h2 className="text-3xl md:text-4xl font-black mb-2 text-white">{formatMoney(eduResult.requiredAmount)}</h2>
-                                    <p className="text-sm text-gray-400">Đã tính lạm phát {eduInputs.inflationRate}%/năm</p>
-                                </div>
-                             ) : (
-                                <div className="flex justify-between items-center z-10 relative">
+                    ) : activeTab === 'education' ? (
+                        <div className="space-y-6">
+                            {/* EDUCATION HERO */}
+                            <div className="bg-gradient-to-r from-blue-600 to-indigo-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-user-graduate text-8xl"></i></div>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                     <div>
-                                        <p className="text-indigo-200 font-bold text-sm uppercase tracking-widest mb-1">Tổng tài sản</p>
-                                        <h2 className="text-4xl font-black text-white">{formatMoney(compoundResult.total)}</h2>
+                                        <p className="text-blue-200 font-bold text-sm uppercase tracking-widest mb-1">Cần chuẩn bị (Tuổi 18)</p>
+                                        <h2 className="text-4xl font-black mb-2">{formatMoney(eduResult.requiredAmount)}</h2>
+                                        <p className="text-sm text-blue-100 opacity-90">Tổng chi phí {eduInputs.duration} năm đại học (đã tính lạm phát {eduInputs.inflationRate}%)</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-indigo-200 text-xs">Tổng gốc: {formatMoney(compoundResult.totalPrincipal)}</p>
-                                        <p className="text-green-300 font-bold text-lg">+ {formatMoney(compoundResult.interest)} (Lãi)</p>
+                                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-center min-w-[150px]">
+                                        <p className="text-xs font-bold text-blue-100 uppercase">Tiết kiệm tháng</p>
+                                        <p className="text-xl font-black text-white">{formatMoney(eduResult.monthlySavingNeeded || 0)}</p>
+                                        <p className="text-[10px] text-blue-200 mt-1">Lãi đầu tư: {eduInputs.investmentRate}%</p>
                                     </div>
                                 </div>
-                             )}
+                            </div>
+
+                            {/* EDUCATION BREAKDOWN */}
+                            <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase flex items-center gap-2">
+                                    <i className="fas fa-list-ol text-blue-500"></i> Giải trình tài chính
+                                </h3>
+                                <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                    {/* Step 1 */}
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                        <div className="font-bold text-blue-800 dark:text-blue-300 mb-1">B1. Sức mạnh Lạm phát giáo dục</div>
+                                        <div className="flex justify-between">
+                                            <span>Chi phí hiện tại: {formatMoney(eduInputs.tuition + eduInputs.livingCost)}</span>
+                                            <i className="fas fa-arrow-right text-gray-400 mx-2"></i>
+                                            <span className="font-bold">Năm 1 Đại học: {formatMoney(Math.round(eduResult.details.futureTuitionFirstYear))}</span>
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 mt-1 italic">Sau {eduResult.details.yearsToUni} năm với lạm phát {eduInputs.inflationRate}%/năm.</p>
+                                    </div>
+
+                                    {/* Step 2 */}
+                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/10 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                                        <div className="font-bold text-indigo-800 dark:text-indigo-300 mb-1">B2. Tổng gánh nặng {eduInputs.duration} năm</div>
+                                        <div className="flex justify-between items-center">
+                                            <span>Cộng dồn (có trượt giá tiếp):</span>
+                                            <span className="font-bold text-lg">{formatMoney(eduResult.requiredAmount)}</span>
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 mt-1 italic">Đây là "Kho tiền" cần có sẵn khi con 18 tuổi.</p>
+                                    </div>
+
+                                    {/* Step 3 */}
+                                    <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/30">
+                                        <div className="font-bold text-green-800 dark:text-green-300 mb-1">B3. Đòn bẩy Tài chính (Lãi kép)</div>
+                                        <div className="flex justify-between">
+                                            <span>Thay vì để dành (Lãi 0%): {formatMoney(Math.round(eduResult.shortfall / (eduResult.details.yearsToUni * 12)))}/tháng</span>
+                                        </div>
+                                        <div className="flex justify-between font-bold text-green-600 mt-1 pt-1 border-t border-green-200 dark:border-green-800">
+                                            <span>Đầu tư ({eduInputs.investmentRate}%): Chỉ cần {formatMoney(eduResult.monthlySavingNeeded || 0)}/tháng</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* EDUCATION CHART */}
+                            {eduChartData.length > 0 && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase">Cơ cấu Quỹ học vấn (Đòn bẩy)</h3>
+                                    <div className="h-64 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={eduChartData} layout="vertical" barSize={40}>
+                                                <XAxis type="number" hide />
+                                                <YAxis type="category" dataKey="name" hide />
+                                                <Tooltip formatter={(value: number) => formatMoney(value)} cursor={{fill: 'transparent'}} />
+                                                <Legend verticalAlign="top" height={36}/>
+                                                <Bar dataKey="Vốn gốc của anh/chị" stackId="a" fill="#9ca3af" radius={[4, 0, 0, 4]} />
+                                                <Bar dataKey="Lãi đầu tư sinh ra" stackId="a" fill="#10b981" radius={[0, 4, 4, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <p className="text-xs text-center text-gray-500 mt-2 italic">Hơn 50% quỹ học vấn có thể đến từ lãi suất nếu chuẩn bị sớm.</p>
+                                </div>
+                            )}
+
+                            {/* EDUCATION SCRIPT */}
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowScript(!showScript)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-3 py-2 rounded-lg transition">
+                                    <i className={`fas ${showScript ? 'fa-eye-slash' : 'fa-comment-dots'}`}></i> 
+                                    {showScript ? 'Ẩn kịch bản' : 'Hiện kịch bản tư vấn'}
+                                </button>
+                            </div>
+                            
+                            {showScript && (
+                                <div className="bg-white dark:bg-pru-card p-6 rounded-2xl border-l-4 border-blue-500 shadow-lg animate-fade-in relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fas fa-graduation-cap text-6xl text-blue-500"></i></div>
+                                    <h3 className="font-bold text-lg mb-4 text-blue-700 dark:text-blue-300 flex items-center gap-2"><i className="fas fa-microphone-alt"></i> Kịch bản: Món quà hay Món nợ?</h3>
+                                    <div className="space-y-4 text-base text-gray-800 dark:text-gray-200 leading-loose">
+                                        <p className="italic">"Thưa anh/chị, con số <strong>{formatMoney(eduResult.requiredAmount)}</strong> này nghe có vẻ lớn, nhưng đó là thực tế của 15 năm nữa."</p>
+                                        <p className="italic">"Ở tuổi 22 khi con tốt nghiệp, anh/chị muốn trao cho con một <strong>tấm bằng Đại học sạch sẽ</strong> hay một <strong>tấm bằng kèm theo khoản nợ sinh viên</strong>?"</p>
+                                        <p className="italic">"Nếu chúng ta không chuẩn bị ngay từ bây giờ (khi con {eduInputs.childAge} tuổi), thì đến năm 18 tuổi, áp lực tài chính khổng lồ này sẽ dồn lên vai ai? Lên vai anh chị lúc đó đã lớn tuổi, hay lên vai con phải vừa học vừa làm?"</p>
+                                        <p className="italic font-bold text-blue-600">"Chỉ cần để dành {formatMoney(eduResult.monthlySavingNeeded || 0)}/tháng ngay từ hôm nay, anh/chị đã đảm bảo tương lai cho con, bất kể điều gì xảy ra."</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        // COMPOUND VIEW (Keep simple)
+                        <div className="bg-gray-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+                            <div className="flex justify-between items-center z-10 relative">
+                                <div>
+                                    <p className="text-indigo-200 font-bold text-sm uppercase tracking-widest mb-1">Tổng tài sản tích lũy</p>
+                                    <h2 className="text-4xl font-black text-white">{formatMoney(compoundResult.total)}</h2>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-indigo-200 text-xs">Tổng gốc: {formatMoney(compoundResult.totalPrincipal)}</p>
+                                    <p className="text-green-300 font-bold text-lg">+ {formatMoney(compoundResult.interest)} (Lãi)</p>
+                                </div>
+                            </div>
                         </div>
                     )}
 
-                    {/* 2. CHART - COMPARISON */}
+                    {/* 2. CHART - RETIREMENT COMPARISON (Only for Retirement Tab) */}
                     {activeTab === 'retirement' && (
                         <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800">
                             <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase">So sánh gánh nặng tiết kiệm hàng tháng</h3>

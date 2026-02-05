@@ -185,7 +185,9 @@ export const calculateEducation = (
         details: {
             yearsToUni,
             futureTuitionFirstYear,
-            uniDuration
+            uniDuration,
+            realRate: realRate * 100, // Export for UI
+            totalFundNeeded // Export for UI
         }
     };
 };

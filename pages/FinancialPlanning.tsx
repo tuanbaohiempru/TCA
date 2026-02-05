@@ -34,6 +34,9 @@ const FinancialPlanning: React.FC = () => {
 
     // NEW: Option to control where the existing savings are kept
     const [moveAssetsToInvestment, setMoveAssetsToInvestment] = useState(false);
+    
+    // NEW: Show Detailed Calculation Toggle
+    const [showDetails, setShowDetails] = useState(false);
 
     // Education State
     const [eduInputs, setEduInputs] = useState({
@@ -134,6 +137,77 @@ const FinancialPlanning: React.FC = () => {
     // --- RENDER HELPERS ---
     const formatMoney = (amount: number) => amount.toLocaleString('vi-VN') + ' đ';
     const moneySaved = Math.max(0, (bankResult.monthlySavingNeeded || 0) - (investResult.monthlySavingNeeded || 0));
+
+    // Helper to render Calculation Steps
+    const CalculationSteps = ({ result, inputs, type, title }: { result: any, inputs: any, type: 'bank' | 'invest', title: string }) => {
+        const isBank = type === 'bank';
+        const rate = isBank ? inputs.savingsRate : inputs.investmentRate;
+        const assetRate = isBank ? inputs.savingsRate : (moveAssetsToInvestment ? inputs.investmentRate : inputs.savingsRate);
+        
+        return (
+            <div className={`p-4 rounded-xl border text-xs font-mono space-y-3 ${isBank ? 'bg-gray-50 border-gray-200 text-gray-700' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                <h4 className="font-bold border-b pb-2 mb-2 uppercase">{title}</h4>
+                
+                {/* 1. Inflation Logic */}
+                <div>
+                    <div className="flex justify-between font-bold">1. Chi tiêu năm {inputs.retireAge} tuổi:</div>
+                    <div className="pl-2 opacity-80">
+                        {formatMoney(inputs.expense)} × (1 + {inputs.inflationRate}%)^
+                        {result.details.yearsToRetire} năm
+                    </div>
+                    <div className="pl-2 font-bold text-right">= {formatMoney(Math.round(result.details.futureMonthlyExpense))} / tháng</div>
+                </div>
+
+                {/* 2. Pension Offset */}
+                {result.details.estimatedPension > 0 && (
+                    <div>
+                        <div className="flex justify-between font-bold text-blue-600">2. Trừ Lương hưu BHXH:</div>
+                        <div className="pl-2 text-right text-blue-600 font-bold">- {formatMoney(Math.round(result.details.estimatedPension))} / tháng</div>
+                        <div className="pl-2 text-right border-t border-dashed border-gray-300 pt-1">
+                            Còn cần: {formatMoney(Math.round(result.details.netMonthlyNeeded))} / tháng
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Total Fund Logic */}
+                <div>
+                    <div className="flex justify-between font-bold">3. Tổng Quỹ Hưu cần có:</div>
+                    <div className="pl-2 opacity-80">
+                        Để rút {formatMoney(Math.round(result.details.netMonthlyNeeded))} trong {result.details.yearsInRetirement} năm 
+                        <br/>(Lãi suất thực dương: {result.details.realRate.toFixed(2)}%)
+                    </div>
+                    <div className="pl-2 font-bold text-right text-lg border-b border-gray-300 pb-1">= {formatMoney(result.requiredAmount)}</div>
+                </div>
+
+                {/* 4. Asset Growth Logic */}
+                <div>
+                    <div className="flex justify-between font-bold">4. Tài sản {formatMoney(inputs.savings)} sinh lời:</div>
+                    <div className="pl-2 opacity-80">
+                        Lãi suất áp dụng: {assetRate}%/năm
+                    </div>
+                    <div className="pl-2 font-bold text-right text-lg">= {formatMoney(result.currentAmount)}</div>
+                    {!isBank && !moveAssetsToInvestment && inputs.savings > 0 && <div className="text-[9px] text-right italic">(Vẫn tính lãi ngân hàng)</div>}
+                </div>
+
+                {/* 5. Shortfall Logic */}
+                <div className={`${result.shortfall > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <div className="flex justify-between font-bold">5. Thiếu hụt (Cần bù đắp):</div>
+                    <div className="pl-2 text-right font-black text-xl">= {formatMoney(result.shortfall)}</div>
+                </div>
+
+                {/* 6. Monthly Savings Logic */}
+                {result.shortfall > 0 && (
+                    <div>
+                        <div className="flex justify-between font-bold">6. Cần tiết kiệm hàng tháng:</div>
+                        <div className="pl-2 opacity-80">
+                            Trong {result.details.yearsToRetire} năm với lãi suất {rate}%
+                        </div>
+                        <div className="pl-2 text-right font-black text-xl border-t-2 border-current pt-1">= {formatMoney(result.monthlySavingNeeded)}</div>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-6 pb-20 max-w-6xl mx-auto">
@@ -330,6 +404,24 @@ const FinancialPlanning: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* DETAIL TOGGLE & BREAKDOWN */}
+                            <div>
+                                <button 
+                                    onClick={() => setShowDetails(!showDetails)}
+                                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 mb-2"
+                                >
+                                    <i className={`fas ${showDetails ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                                    {showDetails ? 'Ẩn chi tiết cách tính' : 'Xem chi tiết cách tính (Minh bạch hóa)'}
+                                </button>
+                                
+                                {showDetails && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                                        <CalculationSteps title="A. GỬI NGÂN HÀNG (LÃI ĐƠN)" result={bankResult} inputs={retireInputs} type="bank" />
+                                        <CalculationSteps title="B. ĐẦU TƯ (LÃI KÉP)" result={investResult} inputs={retireInputs} type="invest" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Contrast Effect Banner */}

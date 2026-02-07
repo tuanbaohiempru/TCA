@@ -257,7 +257,8 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredCustomers.map(c => {
                     const contractCount = getActiveContractCount(c.id);
-                    const isVIP = c.financialStatus === FinancialStatus.WEALTHY || contractCount >= 3;
+                    // FIX: Accessed financialStatus correctly via c.analysis.financialStatus
+                    const isVIP = c.analysis?.financialStatus === FinancialStatus.WEALTHY || contractCount >= 3;
                     
                     return (
                         <div 

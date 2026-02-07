@@ -1,7 +1,7 @@
 
 import { httpsCallable } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus, Contract, Product, Appointment, AppointmentType } from "../types";
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -178,14 +178,14 @@ export const chatWithData = async (
                     name: "create_customer",
                     description: "Tạo hồ sơ khách hàng mới từ thông tin trong chat hoặc ảnh CCCD.",
                     parameters: {
-                        type: "OBJECT",
+                        type: Type.OBJECT,
                         properties: {
-                            fullName: { type: "STRING", description: "Họ và tên" },
-                            phone: { type: "STRING", description: "Số điện thoại" },
-                            idCard: { type: "STRING", description: "Số CCCD" },
-                            dob: { type: "STRING", description: "Ngày sinh YYYY-MM-DD" },
-                            address: { type: "STRING", description: "Địa chỉ" },
-                            gender: { type: "STRING", description: "Nam hoặc Nữ" }
+                            fullName: { type: Type.STRING, description: "Họ và tên" },
+                            phone: { type: Type.STRING, description: "Số điện thoại" },
+                            idCard: { type: Type.STRING, description: "Số CCCD" },
+                            dob: { type: Type.STRING, description: "Ngày sinh YYYY-MM-DD" },
+                            address: { type: Type.STRING, description: "Địa chỉ" },
+                            gender: { type: Type.STRING, description: "Nam hoặc Nữ" }
                         },
                         required: ["fullName"]
                     }
@@ -194,13 +194,13 @@ export const chatWithData = async (
                     name: "create_appointment",
                     description: "Tạo lịch hẹn mới với khách hàng.",
                     parameters: {
-                        type: "OBJECT",
+                        type: Type.OBJECT,
                         properties: {
-                            customerName: { type: "STRING", description: "Tên khách hàng" },
-                            date: { type: "STRING", description: "Ngày hẹn YYYY-MM-DD" },
-                            time: { type: "STRING", description: "Giờ hẹn HH:mm" },
-                            title: { type: "STRING", description: "Tiêu đề/Nội dung cuộc hẹn" },
-                            type: { type: "STRING", description: "Loại: CONSULTATION, CARE_CALL, FEE_REMINDER, BIRTHDAY" }
+                            customerName: { type: Type.STRING, description: "Tên khách hàng" },
+                            date: { type: Type.STRING, description: "Ngày hẹn YYYY-MM-DD" },
+                            time: { type: Type.STRING, description: "Giờ hẹn HH:mm" },
+                            title: { type: Type.STRING, description: "Tiêu đề/Nội dung cuộc hẹn" },
+                            type: { type: Type.STRING, description: "Loại: CONSULTATION, CARE_CALL, FEE_REMINDER, BIRTHDAY" }
                         },
                         required: ["customerName", "date", "time"]
                     }

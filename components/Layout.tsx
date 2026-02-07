@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User } from 'firebase/auth';
 import { logout } from '../services/auth';
@@ -13,10 +13,9 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   const location = useLocation();
 
-  // Đã xóa 'Hợp đồng' khỏi menu chính, chuyển vào trang Công cụ
   const navItems = [
-    { path: '/', label: 'Home', icon: 'fa-home' },
-    { path: '/customers', label: 'Khách', icon: 'fa-users' },
+    { path: '/', label: 'Tổng quan', icon: 'fa-layer-group' },
+    { path: '/customers', label: 'Khách hàng', icon: 'fa-users' },
     { path: '/tools', label: 'Công cụ', icon: 'fa-th-large' }, 
     { path: '/settings', label: 'Cài đặt', icon: 'fa-cog' }, 
   ];
@@ -26,8 +25,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
       return location.pathname.startsWith(path);
   };
   
-  const pageTitle = navItems.find(item => item.path === location.pathname)?.label || 'Chi tiết';
-
   const handleLogout = async () => {
       if(window.confirm('Bạn chắc chắn muốn đăng xuất?')) {
           await logout();
@@ -35,102 +32,110 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-pru-dark overflow-hidden transition-colors duration-300">
+    <div className="flex h-screen bg-[#f8fafc] dark:bg-[#0f0f0f] overflow-hidden font-sans selection:bg-red-500 selection:text-white">
       
-      {/* 1. DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-pru-card border-r border-gray-200 dark:border-gray-800 z-30 transition-colors">
-        <div className="flex items-center justify-center h-16 border-b border-gray-200 dark:border-gray-800 bg-pru-red text-white">
-          <span className="text-xl font-bold tracking-wider italic">TuanChom <span className="text-[10px] font-normal not-italic opacity-80">MDRT</span></span>
+      {/* 1. DESKTOP SIDEBAR (Floating Style) */}
+      <aside className="hidden md:flex flex-col w-72 m-4 mr-0 rounded-3xl bg-white dark:bg-[#1a1a1a] shadow-xl border border-gray-100 dark:border-gray-800 z-30 transition-all duration-300 relative overflow-hidden">
+        {/* Decorative Blur */}
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-red-50 to-transparent dark:from-red-900/10 pointer-events-none"></div>
+
+        <div className="flex items-center gap-3 px-6 py-8 relative z-10">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pru-red to-red-600 flex items-center justify-center text-white shadow-lg shadow-red-500/30">
+             <i className="fas fa-shield-alt text-lg"></i>
+          </div>
+          <div>
+             <h1 className="text-lg font-black tracking-tight text-gray-900 dark:text-white">TuanChom</h1>
+             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">MDRT Assistant</p>
+          </div>
         </div>
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-2">
+
+        <nav className="flex-1 overflow-y-auto py-2 px-4 space-y-2 relative z-10">
             {navItems.map((item) => (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  className={`flex items-center px-4 py-3 rounded-lg transition-colors ${
-                    isActive(item.path)
-                      ? 'bg-red-50 dark:bg-red-900/20 text-pru-red font-semibold border-l-4 border-pru-red'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  <i className={`fas ${item.icon} w-6 text-center mr-3`}></i>
-                  {item.label}
-                </Link>
-              </li>
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
+                  isActive(item.path)
+                    ? 'bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-transparent text-pru-red shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 transition-colors ${
+                    isActive(item.path) ? 'bg-white dark:bg-red-900/20 text-pru-red shadow-sm' : 'bg-transparent group-hover:bg-gray-100 dark:group-hover:bg-gray-700'
+                }`}>
+                    <i className={`fas ${item.icon} text-lg`}></i>
+                </div>
+                <span className="font-bold text-sm">{item.label}</span>
+                {isActive(item.path) && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-pru-red"></div>}
+              </Link>
             ))}
-          </ul>
         </nav>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-           <div className="flex items-center space-x-3 text-sm text-gray-500 mb-3">
+
+        <div className="p-4 mt-auto relative z-10">
+           <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center gap-3">
              {user?.photoURL ? (
-                 <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full border border-gray-200" />
+                 <img src={user.photoURL} alt="Avatar" className="w-10 h-10 rounded-xl border-2 border-white dark:border-gray-700 shadow-sm" />
              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
-                    <i className="fas fa-user text-white dark:text-gray-400"></i>
+                <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
+                    <i className="fas fa-user"></i>
                 </div>
              )}
-             <div className="overflow-hidden">
-               <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{user?.displayName || 'Tư vấn viên'}</p>
-               <Link to="/settings" className="text-xs text-blue-500 hover:underline">Cấu hình</Link>
+             <div className="flex-1 overflow-hidden">
+               <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{user?.displayName?.split(' ').pop() || 'Tư vấn viên'}</p>
+               <button onClick={handleLogout} className="text-xs text-red-500 hover:underline font-medium">Đăng xuất</button>
              </div>
            </div>
-           <button onClick={handleLogout} className="w-full py-2 flex items-center justify-center text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 rounded-lg transition">
-               <i className="fas fa-sign-out-alt mr-2"></i> Đăng xuất
-           </button>
         </div>
       </aside>
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        {/* 2. HEADER */}
-        <header className="flex items-center justify-between h-14 md:h-16 bg-white dark:bg-pru-card border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 z-20 transition-colors shadow-sm shrink-0">
-          <div className="flex items-center gap-3">
-             <div className="md:hidden w-8 h-8 bg-pru-red rounded-full flex items-center justify-center text-white font-bold text-xs">TC</div>
-             <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">{pageTitle}</h2>
-          </div>
-
-          <div className="flex items-center gap-3">
-             <button 
-                onClick={onToggleChat}
-                className="w-10 h-10 md:w-auto md:px-4 md:py-2 rounded-full bg-red-600 text-white flex items-center justify-center gap-2 hover:bg-red-700 transition group shadow-lg shadow-red-500/30 animate-pulse"
-             >
-                <i className="fas fa-robot text-lg md:text-base"></i>
-                <span className="hidden md:inline text-sm font-bold">Trợ lý AI</span>
-             </button>
-          </div>
+        {/* 2. HEADER (Glassmorphism) */}
+        <header className="absolute top-0 left-0 w-full h-20 z-40 px-4 md:px-8 flex items-center justify-between pointer-events-none">
+            <div className="pointer-events-auto md:hidden pt-4">
+                 {/* Mobile Menu Trigger could go here */}
+                 <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-pru-red font-bold">TC</div>
+            </div>
+            
+            {/* AI Assistant Button (Floating) */}
+            <div className="ml-auto pointer-events-auto pt-4">
+                 <button 
+                    onClick={onToggleChat}
+                    className="group relative flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-white/20 dark:border-gray-700 pl-1 pr-4 py-1 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                 >
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center text-white shadow-md group-hover:animate-pulse-slow">
+                        <i className="fas fa-sparkles"></i>
+                    </div>
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Trợ lý AI</span>
+                 </button>
+            </div>
         </header>
 
         {/* 3. CONTENT AREA */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-pru-dark p-4 md:p-6 pb-24 md:pb-6 relative z-0 scroll-smooth">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-20 md:pt-8 pb-24 md:pb-8 relative z-0 scroll-smooth">
           {children}
         </main>
 
-        {/* 4. BOTTOM NAVIGATION - Mobile Only */}
-        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-pru-card border-t border-gray-200 dark:border-gray-800 flex justify-between items-center min-h-[4.5rem] z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] px-6">
+        {/* 4. BOTTOM NAVIGATION - Mobile Only (Glass) */}
+        <nav className="md:hidden fixed bottom-4 left-4 right-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border border-gray-200 dark:border-gray-800 rounded-2xl flex justify-between items-center px-6 py-3 z-50 shadow-2xl pb-safe">
             {navItems.map((item) => (
                 <Link 
                     key={item.path}
                     to={item.path} 
-                    className={`flex flex-col items-center justify-center w-full py-2 ${isActive(item.path) ? 'text-pru-red' : 'text-gray-400'}`}
+                    className={`flex flex-col items-center justify-center w-full relative group`}
                 >
-                    <i className={`fas ${item.icon} text-lg mb-1 ${isActive(item.path) ? 'animate-bounce-short' : ''}`}></i>
-                    <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
+                    <div className={`text-xl mb-1 transition-all duration-300 ${isActive(item.path) ? 'text-pru-red -translate-y-1' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                        <i className={`fas ${item.icon}`}></i>
+                    </div>
+                    {isActive(item.path) && (
+                        <div className="absolute -bottom-2 w-1 h-1 bg-pru-red rounded-full"></div>
+                    )}
                 </Link>
             ))}
         </nav>
 
       </div>
-      
-      <style>{`
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-        .animate-bounce-short { animation: bounce-short 0.3s; }
-        @keyframes bounce-short {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-3px); }
-        }
-      `}</style>
     </div>
   );
 };

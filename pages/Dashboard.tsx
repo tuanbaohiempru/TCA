@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AppState, ContractStatus, CustomerStatus, Contract, Customer, InteractionType, Appointment, AppointmentStatus, AppointmentType, AppointmentResult, TimelineItem } from '../types';
+import { AppState, ContractStatus, Customer, Appointment, AppointmentStatus, AppointmentResult } from '../types';
 import { generateActionScript } from '../services/geminiService';
 import { formatDateVN } from '../components/Shared';
 
 interface DashboardProps {
   state: AppState;
-  onUpdateContract: (c: Contract) => void;
+  onUpdateContract: (c: any) => void;
   onAddAppointment: (a: Appointment) => Promise<void>;
   onUpdateCustomer: (c: Customer) => Promise<void>;
   onUpdateAppointment: (a: Appointment) => Promise<void>;
@@ -36,285 +36,260 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
   const { customers, contracts, appointments, agentProfile } = state;
   const navigate = useNavigate();
   
-  const [isBriefingOpen, setIsBriefingOpen] = useState(true);
   const [activeSignalIndex, setActiveSignalIndex] = useState(0);
-  const [isFlipping, setIsFlipping] = useState(false);
-
   const [scriptModal, setScriptModal] = useState<{ isOpen: boolean; isLoading: boolean; task: ScheduledTask | null; script: any | null; }>({ 
       isOpen: false, isLoading: false, task: null, script: null 
   });
 
-  const { fixedTasks, opportunitySignals, weeklyPreps } = useMemo(() => {
+  const { fixedTasks, opportunitySignals, weeklyPreps, kpiStats } = useMemo(() => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const next10Days = new Date();
-    next10Days.setDate(today.getDate() + 10);
     
     const fixed: ScheduledTask[] = [];
     const signals: ScheduledTask[] = [];
     const preps: ScheduledTask[] = [];
+
+    // KPI Calc
+    let monthlyPremium = 0;
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    contracts.forEach(c => {
+        const effDate = new Date(c.effectiveDate);
+        if (effDate.getMonth() === currentMonth && effDate.getFullYear() === currentYear && c.status === ContractStatus.ACTIVE) {
+            monthlyPremium += c.totalFee;
+        }
+    });
 
     // 1. FIXED APPOINTMENTS (Today)
     appointments.filter(a => a.date === todayStr).forEach(app => {
         const cus = customers.find(c => c.id === app.customerId);
         fixed.push({
             id: app.id, time: app.time, type: 'appointment', category: 'Lịch hẹn', priority: 'high', score: 100,
-            title: `Gặp mặt: ${app.customerName}`, why: app.note || 'Lịch hẹn trong ngày',
-            actionLabel: 'Ghi kết quả', actionIcon: 'fa-clipboard-check', 
+            title: app.customerName, why: app.note || 'Lịch hẹn trong ngày',
+            actionLabel: 'Check-in', actionIcon: 'fa-check', 
             customer: cus || null, status: app.status
         });
     });
 
-    // 2. SCAN FOR WEEKLY PREPARATION (Birthdays, Anniversaries, Payments)
+    // 2. SCAN FOR WEEKLY PREPARATION
     customers.forEach(cus => {
-        // Birthday Scan
         if (cus.dob) {
             const dob = new Date(cus.dob);
             const nextBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
             if (nextBday < today) nextBday.setFullYear(today.getFullYear() + 1);
-            
-            const diffTime = nextBday.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.ceil((nextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-            if (diffDays <= 10) {
+            if (diffDays <= 7) {
                 preps.push({
-                    id: `prep-bday-${cus.id}`, time: '08:00', type: 'prep', category: 'BIRTHDAY', priority: diffDays <= 3 ? 'high' : 'medium',
-                    score: 0, title: `Sinh nhật: ${cus.fullName}`, why: diffDays === 0 ? 'HÔM NAY!' : `Cần chuẩn bị quà (Còn ${diffDays} ngày)`,
-                    actionLabel: '🛒 Đặt quà ngay', actionIcon: 'fa-gift', customer: cus, status: AppointmentStatus.UPCOMING, daysLeft: diffDays
+                    id: `prep-bday-${cus.id}`, time: 'All Day', type: 'prep', category: 'Sinh nhật', priority: 'high',
+                    score: 0, title: cus.fullName, why: diffDays === 0 ? 'Hôm nay!' : `Còn ${diffDays} ngày`,
+                    actionLabel: 'Gửi quà', actionIcon: 'fa-gift', customer: cus, status: AppointmentStatus.UPCOMING, daysLeft: diffDays
                 });
             }
         }
-
-        // Contract Anniversaries & Next Payment
-        const cusContracts = contracts.filter(c => c.customerId === cus.id && c.status === ContractStatus.ACTIVE);
-        cusContracts.forEach(ct => {
-            // Anniversary
-            const eff = new Date(ct.effectiveDate);
-            const nextAnniv = new Date(today.getFullYear(), eff.getMonth(), eff.getDate());
-            if (nextAnniv < today) nextAnniv.setFullYear(today.getFullYear() + 1);
-            
-            const annivDiff = Math.ceil((nextAnniv.getTime() - today.getTime()) / (1000 * 3600 * 24));
-            if (annivDiff <= 10 && annivDiff >= 0) {
-                preps.push({
-                    id: `prep-anniv-${ct.id}`, time: '08:30', type: 'prep', category: 'ANNIVERSARY', priority: 'medium',
-                    score: 0, title: `Kỷ niệm HĐ: ${ct.contractNumber}`, why: `${cus.fullName} đã đồng hành ${today.getFullYear() - eff.getFullYear()} năm.`,
-                    actionLabel: '📜 Tri ân KH', actionIcon: 'fa-award', customer: cus, status: AppointmentStatus.UPCOMING, daysLeft: annivDiff
-                });
-            }
-
-            // Next Payment Date
-            const nextPay = new Date(ct.nextPaymentDate);
-            const payDiff = Math.ceil((nextPay.getTime() - today.getTime()) / (1000 * 3600 * 24));
-            if (payDiff <= 10 && payDiff >= 0) {
-                preps.push({
-                    id: `prep-pay-${ct.id}`, time: '09:00', type: 'prep', category: 'PAYMENT', priority: payDiff <= 3 ? 'urgent' : 'high',
-                    score: 0, title: `Đóng phí: ${cus.fullName}`, why: `Hạn ${formatDateVN(ct.nextPaymentDate)} (${ct.totalFee.toLocaleString()} đ)`,
-                    actionLabel: '📲 Nhắc phí tinh tế', actionIcon: 'fa-paper-plane', customer: cus, status: AppointmentStatus.UPCOMING, daysLeft: payDiff
-                });
-            }
-        });
     });
 
-    // 3. SCAN FOR OPPORTUNITIES
+    // 3. OPPORTUNITY SIGNALS
     customers.forEach(cus => {
         const cusContracts = contracts.filter(c => c.customerId === cus.id && c.status === ContractStatus.ACTIVE);
-        const annualIncome = (cus.analysis?.incomeMonthly || 0) * 12;
         const totalSA = cusContracts.reduce((sum, c) => sum + (c.mainProduct?.sumAssured || 0), 0);
         
-        const lastTimelineDate = cus.timeline?.[0] ? new Date(cus.timeline[0].date) : new Date(0);
-        const daysSinceLastContact = Math.ceil((today.getTime() - lastTimelineDate.getTime()) / (1000 * 3600 * 24));
-        
-        if (annualIncome > 0 && totalSA < annualIncome * 10) {
-            const gap = (annualIncome * 10) - totalSA;
-            const gapScore = Math.min(50, Math.floor(gap / 100000000));
-            const warmthScore = daysSinceLastContact <= 30 ? 20 : daysSinceLastContact <= 90 ? 10 : 0;
-            
-            signals.push({
-                id: `upsell-${cus.id}`, time: '09:00', type: 'signal', category: 'UPSIZE', priority: 'medium',
-                score: 30 + gapScore + warmthScore,
-                title: `Tư vấn gia tăng cho ${cus.fullName.split(' ').pop()}`, 
-                why: `Thiếu ${(gap/1e9).toFixed(1)} Tỷ dự phòng. Khách đang ấm!`,
-                actionLabel: '🪄 Soạn kịch bản AI', actionIcon: 'fa-magic', customer: cus,
-                status: AppointmentStatus.UPCOMING
+        // Simple logic: Income * 10 > SA
+        if (cus.analysis?.incomeMonthly && totalSA < (cus.analysis.incomeMonthly * 12 * 10)) {
+             signals.push({
+                id: `upsell-${cus.id}`, time: '', type: 'signal', category: 'Gia tăng', priority: 'medium',
+                score: 80, title: cus.fullName, why: 'Chưa đủ quỹ bảo vệ (10x Thu nhập)',
+                actionLabel: 'Tư vấn', actionIcon: 'fa-comment-dollar', customer: cus, status: AppointmentStatus.UPCOMING
             });
         }
     });
 
     return { 
         fixedTasks: fixed.sort((a, b) => a.time.localeCompare(b.time)),
-        opportunitySignals: signals.sort((a, b) => b.score - a.score),
-        weeklyPreps: preps.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0))
+        opportunitySignals: signals,
+        weeklyPreps: preps.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0)),
+        kpiStats: { monthlyPremium }
     };
   }, [customers, contracts, appointments]);
 
-  const handleNextSignal = () => {
-      setIsFlipping(true);
-      setTimeout(() => {
-          setActiveSignalIndex((prev) => (prev + 1) % opportunitySignals.length);
-          setIsFlipping(false);
-      }, 200);
-  };
-
   const executeAction = async (task: ScheduledTask) => {
       if (task.actionIcon === 'fa-gift') {
-          window.open(`https://shopee.vn/search?keyword=quà tặng ${task.category === 'BIRTHDAY' ? 'sinh nhật' : 'tri ân'} cao cấp`, '_blank');
+          window.open(`https://shopee.vn/search?keyword=quà tặng`, '_blank');
           return;
       }
-      if (task.actionIcon === 'fa-magic') {
-          setScriptModal({ isOpen: true, isLoading: true, task, script: null });
-          try {
-              const script = await generateActionScript({
-                  title: task.title,
-                  why: task.why,
-                  category: task.category
-              }, task.customer);
-              setScriptModal(prev => ({ ...prev, isLoading: false, script }));
-          } catch (e) {
-              setScriptModal(prev => ({ ...prev, isLoading: false }));
-          }
-          return;
-      }
-      if (task.type === 'appointment') navigate(`/appointments`, { state: { focusDate: todayStr } });
+      if (task.type === 'appointment') navigate(`/appointments`);
+      if (task.type === 'signal' && task.customer) navigate(`/advisory/${task.customer.id}`);
       if (task.type === 'prep' && task.customer) navigate(`/customers/${task.customer.id}`);
   };
 
-  const currentSignal = opportunitySignals[activeSignalIndex];
-  const todayStr = new Date().toISOString().split('T')[0];
-
   return (
-    <div className="space-y-6 pb-32 animate-fade-in max-w-4xl mx-auto">
-      
-      {/* 1. MORNING BRIEFING */}
-      {isBriefingOpen && (
-          <div className="bg-gradient-to-br from-pru-red to-red-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-              <div className="relative z-10 flex justify-between items-start">
-                  <div>
-                      <h2 className="text-2xl font-black italic">Chào sáng nay, {agentProfile?.fullName.split(' ').pop()}! 🎯</h2>
-                      <p className="text-white/80 text-sm mt-1">Hôm nay có {fixedTasks.length} lịch hẹn và {weeklyPreps.length} sự kiện cần chuẩn bị sớm.</p>
-                  </div>
-                  <button onClick={() => setIsBriefingOpen(false)} className="bg-white/20 w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/30 transition"><i className="fas fa-times"></i></button>
-              </div>
-          </div>
-      )}
+    <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* BENTO GRID LAYOUT */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 auto-rows-min">
+            
+            {/* 1. GREETING & HERO (Span 8) */}
+            <div className="col-span-12 md:col-span-8 bg-gradient-to-r from-red-500 to-pink-600 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden animate-fade-in group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-black/10 rounded-full -ml-10 -mb-10 blur-2xl"></div>
+                
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                        <p className="text-red-100 font-bold uppercase tracking-widest text-xs mb-1">MDRT Journey 2024</p>
+                        <h2 className="text-3xl md:text-4xl font-black mb-2 leading-tight">
+                            Chào ngày mới, {agentProfile?.fullName.split(' ').pop()}! <span className="inline-block animate-float">🚀</span>
+                        </h2>
+                        <p className="text-red-50 opacity-90 max-w-lg">
+                            Bạn đã đạt <strong>{(kpiStats.monthlyPremium / 1000000).toLocaleString()}tr</strong> doanh số tháng này. 
+                            Hãy giữ vững phong độ để chinh phục mục tiêu MDRT!
+                        </p>
+                    </div>
+                    
+                    <div className="mt-8 flex gap-3">
+                        <button onClick={() => navigate('/customers')} className="bg-white text-red-600 px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition active:scale-95 flex items-center gap-2">
+                            <i className="fas fa-plus"></i> Khách hàng mới
+                        </button>
+                        <button onClick={() => navigate('/tools/finance')} className="bg-red-700/50 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700/70 transition backdrop-blur-md border border-white/10 flex items-center gap-2">
+                            <i className="fas fa-calculator"></i> Minh họa nhanh
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-      {/* 2. WEEKLY PREPARATION (New Section) */}
-      {weeklyPreps.length > 0 && (
-          <div className="space-y-4 px-2">
-               <h3 className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest flex items-center gap-2">
-                    <i className="fas fa-bolt"></i> TRẠM CHUẨN BỊ TUẦN TỚI
-               </h3>
-               <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-                    {weeklyPreps.map((prep) => (
-                        <div key={prep.id} className="min-w-[280px] bg-white dark:bg-pru-card p-5 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-800 flex flex-col justify-between">
-                            <div>
-                                <div className="flex justify-between items-start mb-3">
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
-                                        prep.category === 'BIRTHDAY' ? 'bg-pink-100 text-pink-600' : 
-                                        prep.category === 'PAYMENT' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
-                                    }`}>
-                                        {prep.category}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-gray-400">
-                                        {prep.daysLeft === 0 ? 'Hôm nay' : `Còn ${prep.daysLeft} ngày`}
-                                    </span>
-                                </div>
-                                <h4 className="font-black text-gray-800 dark:text-gray-100 text-sm mb-1">{prep.title}</h4>
-                                <p className="text-[11px] text-gray-500 line-clamp-2 italic">"{prep.why}"</p>
+            {/* 2. STATS & KPI (Span 4) */}
+            <div className="col-span-12 md:col-span-4 grid grid-rows-2 gap-6">
+                {/* Active Contracts */}
+                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between hover:shadow-md transition animate-slide-up" style={{animationDelay: '0.1s'}}>
+                    <div>
+                        <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-xl mb-2">
+                            <i className="fas fa-file-contract"></i>
+                        </div>
+                        <p className="text-gray-400 text-xs font-bold uppercase">Hợp đồng Active</p>
+                        <p className="text-2xl font-black text-gray-800 dark:text-white">{contracts.filter(c => c.status === ContractStatus.ACTIVE).length}</p>
+                    </div>
+                    <div className="h-16 w-16">
+                        {/* Mini Sparkline Placeholder */}
+                        <svg viewBox="0 0 100 100" className="w-full h-full text-blue-500 overflow-visible">
+                            <path d="M0 80 Q 25 80 50 50 T 100 20" fill="none" stroke="currentColor" strokeWidth="4" className="drop-shadow-sm" />
+                            <circle cx="100" cy="20" r="6" fill="currentColor" className="animate-pulse" />
+                        </svg>
+                    </div>
+                </div>
+
+                {/* Upcoming Tasks */}
+                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between hover:shadow-md transition animate-slide-up" style={{animationDelay: '0.2s'}}>
+                    <div>
+                        <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center text-xl mb-2">
+                            <i className="fas fa-calendar-check"></i>
+                        </div>
+                        <p className="text-gray-400 text-xs font-bold uppercase">Lịch hẹn hôm nay</p>
+                        <p className="text-2xl font-black text-gray-800 dark:text-white">{fixedTasks.length}</p>
+                    </div>
+                    <div className="text-right">
+                        <span className="text-xs font-bold text-green-500 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-lg">
+                            +2 Mới
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* 3. TASK LIST (Span 4) */}
+            <div className="col-span-12 md:col-span-4 bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col h-full animate-slide-up" style={{animationDelay: '0.3s'}}>
+                <h3 className="font-bold text-gray-800 dark:text-white text-lg mb-4 flex items-center gap-2">
+                    <i className="fas fa-tasks text-gray-400"></i> Việc cần làm
+                </h3>
+                
+                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                    {fixedTasks.length > 0 ? fixedTasks.map(task => (
+                        <div key={task.id} className="group flex items-start gap-3 p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+                            <div className="mt-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                            <div className="flex-1">
+                                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{task.time} - {task.title}</p>
+                                <p className="text-xs text-gray-500 line-clamp-1">{task.why}</p>
                             </div>
-                            <button 
-                                onClick={() => executeAction(prep)}
-                                className="mt-4 w-full py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-[10px] font-black transition flex items-center justify-center gap-2"
-                            >
-                                <i className={`fas ${prep.actionIcon}`}></i> {prep.actionLabel}
+                            <button onClick={() => executeAction(task)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition">
+                                <i className="fas fa-chevron-right"></i>
                             </button>
                         </div>
-                    ))}
-               </div>
-          </div>
-      )}
-
-      {/* 3. OPPORTUNITY STATION (Carousel) */}
-      {opportunitySignals.length > 0 && (
-          <div className="space-y-4 px-2">
-               <div className="flex items-center justify-between">
-                    <h3 className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                        <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span> CƠ HỘI KHAI PHÁ
-                    </h3>
-                    <button onClick={handleNextSignal} className="text-[10px] font-bold text-gray-400 hover:text-indigo-500">Tiếp theo <i className="fas fa-chevron-right ml-1"></i></button>
-               </div>
-               <div className={`transition-all duration-300 transform ${isFlipping ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-                    <div className="bg-white dark:bg-pru-card p-6 rounded-3xl shadow-xl border-t-8 border-indigo-500 relative">
-                        <h4 className="text-xl font-black text-gray-800 dark:text-gray-100 mb-2">{currentSignal.title}</h4>
-                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400 italic mb-6 border-l-2 border-indigo-100 pl-4">"{currentSignal.why}"</p>
-                        <button onClick={() => executeAction(currentSignal)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 transition active:scale-95"><i className="fas fa-wand-magic-sparkles"></i> {currentSignal.actionLabel}</button>
+                    )) : (
+                        <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                            <i className="fas fa-mug-hot text-2xl mb-2 opacity-50"></i>
+                            <p className="text-xs">Thảnh thơi! Chưa có lịch.</p>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Weekly Prep Footer */}
+                {weeklyPreps.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Sắp tới</p>
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            {weeklyPreps.map(p => (
+                                <div key={p.id} onClick={() => executeAction(p)} className="flex-shrink-0 w-10 h-10 rounded-full bg-pink-50 dark:bg-pink-900/20 text-pink-500 flex items-center justify-center cursor-pointer hover:scale-110 transition border border-pink-100 dark:border-pink-800" title={p.title}>
+                                    <i className={`fas ${p.actionIcon}`}></i>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-               </div>
-          </div>
-      )}
+                )}
+            </div>
 
-      {/* 4. FIXED SCHEDULE */}
-      <div className="space-y-4 px-2">
-          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-              <i className="fas fa-calendar-alt text-pru-red"></i> LỊCH TRÌNH CỐ ĐỊNH (HÔM NAY)
-          </h3>
-          <div className="space-y-3">
-              {fixedTasks.length > 0 ? (
-                  fixedTasks.map((task) => (
-                      <div key={task.id} className="flex gap-4 group">
-                          <div className="w-16 pt-2 shrink-0 text-center">
-                               <span className="text-[10px] font-black text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-gray-700">{task.time}</span>
-                          </div>
-                          <div className="flex-1 bg-white dark:bg-pru-card p-4 rounded-2xl shadow-sm border-l-4 border-pru-red hover:shadow-md transition">
-                              <div className="flex justify-between items-start">
-                                  <div>
-                                      <h4 className="font-black text-gray-800 dark:text-gray-100 text-sm">{task.title}</h4>
-                                      <p className="text-[10px] text-gray-400 mt-0.5">{task.why}</p>
-                                  </div>
-                                  <button onClick={() => executeAction(task)} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center transition hover:bg-pru-red hover:text-white">
-                                      <i className={`fas ${task.actionIcon} text-xs`}></i>
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  ))
-              ) : (
-                  <div className="py-10 text-center bg-white/30 dark:bg-pru-card/30 rounded-3xl border border-dashed border-gray-200 dark:border-gray-800">
-                      <p className="text-xs text-gray-400">Hôm nay không có lịch hẹn nào.</p>
-                  </div>
-              )}
-          </div>
-      </div>
+            {/* 4. OPPORTUNITIES (Span 8) */}
+            <div className="col-span-12 md:col-span-8 bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden flex flex-col justify-center animate-slide-up" style={{animationDelay: '0.4s'}}>
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+                
+                <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-xl flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></span>
+                            Tín hiệu Khai thác
+                        </h3>
+                        <span className="bg-white/10 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm border border-white/10">
+                            {opportunitySignals.length} cơ hội
+                        </span>
+                    </div>
 
-      {/* AI SCRIPT MODAL */}
-      {scriptModal.isOpen && (
-          <div className="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[150] p-0 md:p-4 backdrop-blur-md animate-fade-in">
-              <div className="bg-white dark:bg-pru-card rounded-t-3xl md:rounded-3xl w-full max-w-md p-6 shadow-2xl overflow-hidden">
-                  <h3 className="text-lg font-black text-gray-800 dark:text-gray-100 mb-6 flex items-center gap-2"><i className="fas fa-wand-magic-sparkles text-purple-500"></i> Kịch bản MDRT cá nhân hóa</h3>
-                  {scriptModal.isLoading ? (
-                      <div className="py-10 flex flex-col items-center gap-4"><div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div><p className="text-sm font-bold text-gray-500">AI đang phân tích Timeline...</p></div>
-                  ) : scriptModal.script ? (
-                      <div className="space-y-4 animate-slide-up">
-                          <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-2xl border border-purple-100 dark:border-purple-800"><label className="text-[10px] font-black uppercase text-purple-600 mb-1 block">Mở lời (Hook)</label><p className="text-sm text-gray-800 dark:text-gray-200 italic">"{scriptModal.script.opening}"</p></div>
-                          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl"><label className="text-[10px] font-black uppercase text-gray-500 mb-1 block">Nội dung</label><p className="text-sm text-gray-700 dark:text-gray-300">{scriptModal.script.core_message}</p></div>
-                          <div className="flex gap-2 pt-4">
-                              <button onClick={() => { navigator.clipboard.writeText(`${scriptModal.script.opening}\n\n${scriptModal.script.core_message}`); if (scriptModal.task?.customer) window.open(`https://zalo.me/${scriptModal.task.customer.phone.replace(/\D/g, '')}`, '_blank'); }} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm transition">Gửi qua Zalo</button>
-                              <button onClick={() => setScriptModal({ isOpen: false, isLoading: false, task: null, script: null })} className="px-6 py-4 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-2xl font-bold text-sm">Đóng</button>
-                          </div>
-                      </div>
-                  ) : <p className="text-center text-red-500 py-4">Lỗi tải kịch bản.</p>}
-              </div>
-          </div>
-      )}
+                    {opportunitySignals.length > 0 ? (
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row gap-6 items-center">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center text-2xl shadow-lg text-white font-bold shrink-0">
+                                {opportunitySignals[activeSignalIndex].score}
+                            </div>
+                            <div className="flex-1 text-center md:text-left">
+                                <h4 className="text-lg font-bold mb-1">{opportunitySignals[activeSignalIndex].title}</h4>
+                                <p className="text-indigo-200 text-sm italic">"{opportunitySignals[activeSignalIndex].why}"</p>
+                            </div>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <button onClick={() => setActiveSignalIndex((prev) => (prev + 1) % opportunitySignals.length)} className="px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl transition">
+                                    <i className="fas fa-step-forward"></i>
+                                </button>
+                                <button onClick={() => executeAction(opportunitySignals[activeSignalIndex])} className="flex-1 md:flex-none px-6 py-3 bg-white text-indigo-900 rounded-xl font-bold shadow-lg hover:bg-indigo-50 transition flex items-center justify-center gap-2">
+                                    Hành động ngay <i className="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-indigo-200">
+                            <i className="fas fa-check-circle text-4xl mb-3 opacity-50"></i>
+                            <p>Tuyệt vời! Bạn đã xử lý hết các tín hiệu nóng.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
 
-      <style>{`
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-          .animate-fade-in { animation: fadeIn 0.4s ease-out both; }
-          .animate-slide-up { animation: slideUp 0.3s ease-out both; }
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-          @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
+        </div>
+
+        {/* AI Script Modal (Kept simple for now) */}
+        {scriptModal.isOpen && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white dark:bg-pru-card p-6 rounded-3xl max-w-md w-full">
+                    <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">AI Script Generator</h3>
+                    {scriptModal.isLoading ? <p>Đang viết...</p> : <p>Nội dung kịch bản...</p>}
+                    <button onClick={() => setScriptModal({ ...scriptModal, isOpen: false })} className="mt-4 w-full bg-gray-200 py-2 rounded-xl font-bold text-gray-700">Đóng</button>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

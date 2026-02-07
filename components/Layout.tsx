@@ -136,9 +136,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 <div className="pointer-events-auto">
                     <button 
                         onClick={onToggleChat}
-                        className="w-14 h-14 rounded-full bg-gradient-to-br from-pru-red to-pink-600 text-white shadow-lg shadow-red-500/40 flex items-center justify-center transform transition-transform active:scale-95 border-4 border-gray-50 dark:border-gray-900 hover:scale-105"
+                        className="w-14 h-14 rounded-full bg-gradient-to-br from-pru-red to-pink-600 text-white shadow-lg shadow-red-500/40 flex flex-col items-center justify-center transform transition-transform active:scale-95 border-4 border-gray-50 dark:border-gray-900 hover:scale-105"
                     >
-                        <i className="fas fa-sparkles text-xl animate-pulse-slow"></i>
+                        <i className="fas fa-robot text-lg mb-0.5 animate-pulse-slow"></i>
+                        <span className="text-[9px] font-black leading-none">AI</span>
                     </button>
                 </div>
             </div>

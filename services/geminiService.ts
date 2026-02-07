@@ -80,17 +80,17 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
         const pdf = await loadingTask.promise;
         let fullText = '';
 
-        const maxPages = Math.min(pdf.numPages, 10);
+        const maxPages = Math.min(pdf.numPages, 15); // Increased limit slightly
 
         for (let i = 1; i <= maxPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map((item: any) => item.str).join(' ');
-            fullText += `--- Page ${i} ---\n${pageText}\n`;
+            fullText += `[Trang ${i}] ${pageText}\n`;
         }
 
-        if (pdf.numPages > 10) {
-            fullText += `\n... (Đã cắt bớt ${pdf.numPages - 10} trang còn lại để tối ưu)`;
+        if (pdf.numPages > 15) {
+            fullText += `\n... (Đã cắt bớt ${pdf.numPages - 15} trang còn lại)`;
         }
 
         return fullText;
@@ -98,6 +98,37 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
         console.error("Client-side PDF Extract Error:", e);
         return "Lỗi đọc file PDF. Vui lòng đảm bảo file có thể truy cập công khai hoặc CORS được cấu hình đúng.";
     }
+};
+
+// --- SMART RETRIEVAL HELPER ---
+/**
+ * Finds relevant product details based on user query.
+ * Only injects full PDF content if the product name is mentioned or context implies it.
+ */
+const getRelevantProductKnowledge = (query: string, products: Product[]): string => {
+    const queryLower = query.toLowerCase();
+    let knowledge = "";
+
+    // 1. Identify mentioned products
+    const mentionedProducts = products.filter(p => 
+        queryLower.includes(p.name.toLowerCase()) || 
+        queryLower.includes(p.code.toLowerCase())
+    );
+
+    if (mentionedProducts.length > 0) {
+        knowledge += "\n*** CHI TIẾT SẢN PHẨM LIÊN QUAN (ĐƯỢC TRÍCH XUẤT TỪ TÀI LIỆU): ***\n";
+        mentionedProducts.forEach(p => {
+            if (p.extractedContent) {
+                // Limit content length to avoid token overflow if many products match
+                const safeContent = p.extractedContent.substring(0, 15000); 
+                knowledge += `\n--- SẢN PHẨM: ${p.name} (${p.code}) ---\n${safeContent}\n`;
+            } else {
+                knowledge += `\n--- SẢN PHẨM: ${p.name} ---\n(Chưa có nội dung chi tiết PDF, chỉ có mô tả: ${p.description})\n`;
+            }
+        });
+    }
+
+    return knowledge;
 };
 
 // --- COMPETITOR ANALYSIS (IMPORT) ---
@@ -152,7 +183,6 @@ export const analyzeCompetitorData = async (textData: string, mimeType: string =
             const response = await clientAI.models.generateContent(req);
             return JSON.parse(response.text || '{}');
         } else if (isFirebaseReady) {
-             // Fallback for image not supported well via simple text gateway yet, assume text mainly
              const gateway = httpsCallable(functions, 'geminiGateway');
              const result: any = await gateway({
                 endpoint: 'generateContent',
@@ -168,10 +198,10 @@ export const analyzeCompetitorData = async (textData: string, mimeType: string =
     }
 };
 
-// --- BATTLE ADVISOR (NEW PHASE 3) ---
+// --- BATTLE ADVISOR ---
 export const analyzeProductBattle = async (pruFeatures: any, compFeatures: any, compName: string, compProduct: string) => {
     const prompt = `
-    Bạn là "Su Sam Squad" - Chuyên gia huấn luyện bán hàng bảo hiểm Prudential (MDRT).
+    Bạn là "SUSAM_COACH" - Chuyên gia huấn luyện bán hàng bảo hiểm Prudential (MDRT).
     
     NHIỆM VỤ:
     So sánh thẻ sức khỏe Prudential (Hành Trang Vui Khỏe) với đối thủ: ${compName} - ${compProduct}.
@@ -194,8 +224,6 @@ export const analyzeProductBattle = async (pruFeatures: any, compFeatures: any, 
         "usp": "Điểm mạnh nhất (Unique Selling Point) của Pru trong kèo đấu này (VD: Bảo lãnh rộng, Cam kết tái tục, Thương hiệu uy tín...)",
         "closing_script": "Một đoạn thoại ngắn (2-3 câu) chốt sale dựa trên USP đó, tạo sự khan hiếm hoặc thôi thúc hành động."
     }
-    
-    Lưu ý: Nếu dữ liệu đối thủ thiếu, hãy giả định dựa trên kiến thức chung về thị trường bảo hiểm Việt Nam nhưng ghi chú là "Dựa trên giả định".
     `;
 
     try {
@@ -209,9 +237,9 @@ export const analyzeProductBattle = async (pruFeatures: any, compFeatures: any, 
 
 // --- ID CARD EXTRACTION ---
 export const extractIdentityCard = async (base64Image: string) => {
-    const model = 'gemini-2.5-flash'; // Optimized for vision
+    const model = 'gemini-2.5-flash'; 
     const promptParts = [
-        { text: "Trích xuất thông tin từ thẻ CCCD này. Trả về JSON: {idCard, fullName, dob (YYYY-MM-DD), gender, companyAddress}" },
+        { text: "Bạn là SUSAM_ADMIN. Trích xuất thông tin từ thẻ CCCD này. Trả về JSON: {idCard, fullName, dob (YYYY-MM-DD), gender, companyAddress}" },
         { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
     ];
 
@@ -242,7 +270,7 @@ export const extractIdentityCard = async (base64Image: string) => {
     return null;
 }
 
-// --- INTELLIGENT CHAT (RAG + TOOLS) ---
+// --- INTELLIGENT CHAT (RAG + TOOLS + SQUAD) ---
 export const chatWithData = async (
     query: string, 
     imageBase64: string | null, 
@@ -251,39 +279,73 @@ export const chatWithData = async (
     onStream?: (chunk: string) => void
 ): Promise<{ text: string; action?: any }> => {
     
-    // 1. Prepare Context (RAG)
-    const customerSummary = state.customers.map(c => `${c.fullName} (ID:${c.id}, Phone:${c.phone})`).join('\n');
-    const contractSummary = state.contracts.map(c => `HĐ ${c.contractNumber} của KH ${c.customerId}`).join('\n');
+    // 1. Prepare Core Context
+    const customerSummary = state.customers.map(c => `- ${c.fullName} (ID:${c.id}, Phone:${c.phone}) [Trạng thái: ${c.status}]`).join('\n');
+    const contractSummary = state.contracts.map(c => `- HĐ ${c.contractNumber} (${c.mainProduct.productName}) của KH ${c.customerId}. Phí: ${c.totalFee.toLocaleString()}đ. Trạng thái: ${c.status}`).join('\n');
     
+    // 2. Prepare Product Context (Summary List)
+    const productSummary = state.products.map(p => `- [${p.code}] ${p.name}: ${p.description}`).join('\n');
+
+    // 3. Smart Retrieval (Inject Detail Content if Relevant)
+    const detailedProductKnowledge = getRelevantProductKnowledge(query, state.products);
+
     const context = `
-    DỮ LIỆU HIỆN CÓ:
-    - Danh sách khách hàng:
+    === KHO DỮ LIỆU ===
+    A. DANH SÁCH KHÁCH HÀNG:
     ${customerSummary}
-    - Danh sách hợp đồng:
+
+    B. DANH SÁCH HỢP ĐỒNG:
     ${contractSummary}
+
+    C. DANH SÁCH SẢN PHẨM HIỆN CÓ:
+    ${productSummary}
+
+    ${detailedProductKnowledge}
     
-    NGƯỜI DÙNG ĐANG HỎI: "${query}"
+    === YÊU CẦU NGƯỜI DÙNG ===
+    "${query}"
     `;
 
+    // 4. Define SU SAM SQUAD System Instruction
     const systemInstruction = `
-    Bạn là TuanChom AI - Trợ lý siêu việt cho tư vấn viên bảo hiểm Prudential.
-    
-    KHẢ NĂNG CỦA BẠN:
-    1. Trả lời câu hỏi dựa trên dữ liệu cung cấp.
-    2. Nếu người dùng muốn tạo khách hàng, hãy trích xuất thông tin và gọi tool 'create_customer'.
-    3. Nếu người dùng muốn đặt lịch hẹn, hãy gọi tool 'create_appointment'.
-    4. Nếu người dùng muốn chọn một khách hàng cụ thể từ danh sách, hãy trả về action SELECT_CUSTOMER.
-    
-    LUÔN TRẢ LỜI NGẮN GỌN, THÂN THIỆN.
+    Bạn là **Su Sam Squad** - Đội ngũ trợ lý AI chuyên nghiệp cho Tư vấn viên Prudential.
+    Bạn có 5 nhân cách chuyên môn. Hãy tự động nhận diện ý định người dùng để chọn nhân cách trả lời phù hợp nhất:
+
+    1. **SUSAM_SALES (Chuyên gia Bán hàng):** 
+       - Dùng khi: Hỏi về tư vấn, khơi gợi nhu cầu, chốt sale, so sánh sản phẩm.
+       - Phong cách: Máu lửa, tập trung vào lợi ích, dùng kỹ thuật storytelling.
+       - Nhiệm vụ: Gợi ý sản phẩm phù hợp dựa trên data khách hàng.
+
+    2. **SUSAM_EXPERT (Luật sư/Chuyên gia SP):**
+       - Dùng khi: Hỏi chi tiết về điều khoản, quyền lợi, loại trừ, định nghĩa bệnh.
+       - Phong cách: Chính xác, trích dẫn rõ ràng (Dựa trên dữ liệu sản phẩm chi tiết được cung cấp).
+       - *Lưu ý:* Nếu không có dữ liệu chi tiết trong context, hãy báo người dùng upload PDF sản phẩm.
+
+    3. **SUSAM_CRM (Quản gia):**
+       - Dùng khi: Hỏi về thông tin khách hàng, nhắc lịch, sinh nhật, đóng phí.
+       - Phong cách: Chu đáo, tận tâm, rà soát kỹ dữ liệu ngày tháng.
+
+    4. **SUSAM_ADMIN (Thư ký):**
+       - Dùng khi: Yêu cầu tạo hồ sơ, đặt lịch hẹn, nhập liệu.
+       - Hành động: Luôn ưu tiên dùng Tool (create_customer, create_appointment).
+
+    5. **SUSAM_COACH (Huấn luyện viên):**
+       - Dùng khi: Người dùng than vãn bị từ chối, xin lời khuyên xử lý tình huống.
+       - Phong cách: Đồng cảm, đưa ra lời thoại mẫu (Script) để TVV áp dụng ngay.
+
+    QUY TẮC CHUNG:
+    - Luôn trả lời ngắn gọn, đi thẳng vào vấn đề.
+    - Định dạng văn bản đẹp (Markdown: Bold, Bullet points).
+    - Nếu cần tạo dữ liệu, HÃY GỌI TOOL.
     `;
 
-    // 2. Define Tools
+    // 5. Define Tools
     const tools: Tool[] = [
         {
             functionDeclarations: [
                 {
                     name: "create_customer",
-                    description: "Tạo hồ sơ khách hàng mới từ thông tin trong chat hoặc ảnh CCCD.",
+                    description: "Tạo hồ sơ khách hàng mới. Nếu thông tin bị trùng, hệ thống sẽ tự xử lý.",
                     parameters: {
                         type: Type.OBJECT,
                         properties: {
@@ -299,7 +361,7 @@ export const chatWithData = async (
                 },
                 {
                     name: "create_appointment",
-                    description: "Tạo lịch hẹn mới với khách hàng.",
+                    description: "Tạo lịch hẹn mới.",
                     parameters: {
                         type: Type.OBJECT,
                         properties: {
@@ -316,11 +378,11 @@ export const chatWithData = async (
         }
     ];
 
-    // 3. Construct Request
+    // 6. Construct Request
     const parts: any[] = [{ text: context }];
     if (imageBase64) {
         parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
-        parts.push({ text: "Hãy trích xuất thông tin từ ảnh này để thực hiện yêu cầu." });
+        parts.push({ text: "Hãy đóng vai SUSAM_ADMIN, trích xuất thông tin từ ảnh này để thực hiện yêu cầu." });
     }
 
     try {
@@ -360,7 +422,7 @@ export const chatWithData = async (
     }
 };
 
-// --- CONSULTANT ROLEPLAY ---
+// --- CONSULTANT ROLEPLAY (UPDATED FOR SUSAM_COACH) ---
 export const consultantChat = async (msg: string, customer: any, contracts: any, relationships: any, profile: any, goal: string, history: any[], role: string, plan: any, style: string) => {
     const context = `
     KHÁCH HÀNG: ${customer.fullName}, ${new Date().getFullYear() - new Date(customer.dob).getFullYear()} tuổi.
@@ -383,8 +445,8 @@ export const consultantChat = async (msg: string, customer: any, contracts: any,
         `;
     } else {
         systemInstruction = `
-        BẠN LÀ 'SU SAM' - SIÊU TRỢ LÝ MDRT.
-        Nhiệm vụ: Đóng vai Tư vấn viên mẫu để hướng dẫn người dùng.
+        BẠN LÀ 'SUSAM_COACH' - SIÊU TRỢ LÝ MDRT.
+        Nhiệm vụ: Đóng vai Tư vấn viên mẫu để hướng dẫn người dùng (Role Model).
         Hãy đưa ra câu trả lời mẫu xuất sắc nhất cho tình huống này.
         Sử dụng kỹ thuật: Đồng cảm -> Cô lập vấn đề -> Giải quyết -> Chốt.
         `;
@@ -398,7 +460,7 @@ export const consultantChat = async (msg: string, customer: any, contracts: any,
     
     TVV (User) vừa nói: "${msg}"
     
-    HÃY TRẢ LỜI (Là ${role === 'customer' ? 'Khách hàng' : 'Su Sam'}):
+    HÃY TRẢ LỜI (Là ${role === 'customer' ? 'Khách hàng' : 'SUSAM_COACH'}):
     `;
 
     return await callGemini(systemInstruction, prompt);
@@ -406,46 +468,58 @@ export const consultantChat = async (msg: string, customer: any, contracts: any,
 
 // --- MARKETING & CONTENT ---
 export const generateCaseStudy = async (customer: Customer, contracts: Contract[], framework: 'AIDA' | 'PAS' = 'AIDA') => {
-    const prompt = `Viết Case Study về KH ${customer.fullName} (${customer.occupation}) đã tham gia bảo hiểm. Framework: ${framework}. Output JSON: {title, content, imagePrompt}`;
+    const prompt = `Bạn là SUSAM_SALES (Marketing Mode). Viết Case Study về KH ${customer.fullName} (${customer.occupation}) đã tham gia bảo hiểm. Framework: ${framework}. Output JSON: {title, content, imagePrompt}`;
     const json = await callGemini("Bạn là Content Writer MDRT.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '{}');
 };
 
 export const generateSocialPost = async (topic: string, tone: string) => {
-    const prompt = `Viết 3 status Facebook về: ${topic}. Tone: ${tone}. Output JSON: [{title, content}]`;
+    const prompt = `Bạn là SUSAM_SALES (Marketing Mode). Viết 3 status Facebook về: ${topic}. Tone: ${tone}. Output JSON: [{title, content}]`;
     const json = await callGemini("Bạn là Content Writer MDRT.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '[]');
 };
 
 export const generateContentSeries = async (topic: string, profile: AgentProfile | null) => {
-    const prompt = `Lập plan 5 bài viết 5 ngày về: ${topic}. Output JSON: [{day, type, content}]`;
+    const prompt = `Bạn là SUSAM_SALES (Marketing Mode). Lập plan 5 bài viết 5 ngày về: ${topic}. Output JSON: [{day, type, content}]`;
     const json = await callGemini("Bạn là Content Writer MDRT.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '[]');
 };
 
 export const generateStory = async (facts: string, emotion: string) => {
-    return await callGemini(`Viết câu chuyện cảm động. Cảm xúc: ${emotion}`, facts);
+    return await callGemini(`Bạn là SUSAM_SALES. Viết câu chuyện cảm động. Cảm xúc: ${emotion}`, facts);
 };
 
 // --- OPERATIONS ---
 export const getObjectionSuggestions = async (objection: string, customerContext: Customer | string = 'Khách hàng') => {
-    const prompt = `Xử lý từ chối: "${objection}". Output JSON: [{label, content, type: 'empathy'|'logic'|'question'}]`;
+    const prompt = `Bạn là SUSAM_COACH. Xử lý từ chối: "${objection}". Output JSON: [{label, content, type: 'empathy'|'logic'|'question'}]`;
     const json = await callGemini("Bạn là MDRT Coach.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '[]');
 };
 
 export const checkPreUnderwriting = async (condition: string) => {
-    const prompt = `Thẩm định sơ bộ bệnh: "${condition}". Output JSON: {prediction: 'Standard'|'Loading'|'Exclusion'|'Decline', predictionLabel, riskLevel, loadingEstimate, reasoning}`;
+    const prompt = `Bạn là SUSAM_EXPERT (Underwriting Mode). Thẩm định sơ bộ bệnh: "${condition}". Output JSON: {prediction: 'Standard'|'Loading'|'Exclusion'|'Decline', predictionLabel, riskLevel, loadingEstimate, reasoning}`;
     const json = await callGemini("Bạn là Underwriter.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '{}');
 };
 
 export const analyzeClaimSupport = async (contract: Contract, product: Product | undefined, eventDescription: string) => {
-    const prompt = `Phân tích Claim. HĐ: ${contract.contractNumber}, SP: ${product?.name}. Sự kiện: ${eventDescription}. Output JSON: {eligible: bool, warning, checklist: [{item, note}], estimatedAmount, reasoning}`;
+    const context = product?.extractedContent ? `CHI TIẾT SẢN PHẨM: ${product.extractedContent.substring(0, 10000)}` : `Mô tả sản phẩm: ${product?.description}`;
+    
+    const prompt = `
+    Bạn là SUSAM_EXPERT (Claim Mode).
+    
+    Hợp đồng: ${contract.contractNumber}
+    Sản phẩm: ${product?.name}
+    ${context}
+    
+    Sự kiện bảo hiểm: ${eventDescription}
+    
+    Hãy phân tích quyền lợi. Output JSON: {eligible: bool, warning, checklist: [{item, note}], estimatedAmount, reasoning}
+    `;
     const json = await callGemini("Bạn là Claim Specialist.", prompt, 'gemini-2.5-flash', 'application/json');
     return JSON.parse(json || '{}');
 };
 
 export const generateActionScript = async (task: any, customer: any) => {
-    return await callGemini("Viết kịch bản ngắn.", `Mục đích: ${task.title}. Cho KH: ${customer.fullName}`);
+    return await callGemini("Bạn là SUSAM_COACH. Viết kịch bản ngắn.", `Mục đích: ${task.title}. Cho KH: ${customer.fullName}`);
 };

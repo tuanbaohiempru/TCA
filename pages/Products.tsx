@@ -5,7 +5,7 @@ import { Product, ProductType, Gender, ProductStatus, ProductCalculationType, Fo
 import { ConfirmModal, CurrencyInput } from '../components/Shared';
 import { uploadFile } from '../services/storage'; 
 import { calculateProductFee } from '../services/productCalculator';
-import { extractPdfText } from '../services/geminiService'; // Import extractor
+import { extractPdfText, extractTextFromFile } from '../services/geminiService'; // Import new client-side extractor
 import { HTVKPlan, HTVKPackage } from '../data/pruHanhTrangVuiKhoe';
 
 interface ProductsPageProps {
@@ -90,12 +90,31 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ products, onAdd, onUpdate, 
         if (!file) return;
         setIsUploadingPdf(true);
         try {
-            const url = await uploadFile(file, 'product-docs');
+            // 1. Process client-side immediately (No CORS issue)
             let extracted = "";
-            try { const res = await extractPdfText(url); extracted = res; if (!extracted) alert("Cảnh báo: Không thể đọc văn bản."); } catch (err) { console.error("Extraction error", err); alert("Lỗi khi đọc file PDF."); }
-            setFormData(prev => ({ ...prev, pdfUrl: url, extractedContent: extracted, rulesAndTerms: prev.rulesAndTerms || `Tài liệu gốc: ${file.name}` }));
+            if (file.type === 'application/pdf') {
+                 extracted = await extractTextFromFile(file);
+                 if (!extracted) console.warn("PDF extraction empty or failed");
+            }
+
+            // 2. Upload file to Storage
+            const url = await uploadFile(file, 'product-docs');
+            
+            // 3. Update State
+            setFormData(prev => ({ 
+                ...prev, 
+                pdfUrl: url, 
+                extractedContent: extracted, 
+                rulesAndTerms: prev.rulesAndTerms || `Tài liệu gốc: ${file.name}` 
+            }));
+            
             alert("Đã tải và xử lý tài liệu thành công!");
-        } catch (error) { alert("Lỗi upload: " + error); } finally { setIsUploadingPdf(false); }
+        } catch (error) { 
+            console.error(error);
+            alert("Lỗi upload: " + error); 
+        } finally { 
+            setIsUploadingPdf(false); 
+        }
     };
 
     const handleRateTableUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

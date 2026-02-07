@@ -135,6 +135,7 @@ export interface CustomerDocument {
   type: 'image' | 'pdf' | 'other';
   category: 'personal' | 'medical' | 'contract' | 'claim';
   uploadDate: string;
+  extractedContent?: string; // NEW: Store parsed text content
 }
 
 export enum RelationshipType {

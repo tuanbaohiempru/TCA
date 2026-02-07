@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CompetitorProduct, ComparisonFeatures } from '../types';
 import { addData, updateData, deleteData, COLLECTIONS } from '../services/db';
-import { extractPdfText, analyzeCompetitorData } from '../services/geminiService';
+import { extractTextFromFile, analyzeCompetitorData } from '../services/geminiService'; // Use extractTextFromFile
 import { uploadFile } from '../services/storage';
 
 interface CompetitorProductsPageProps {
@@ -83,7 +83,7 @@ const CompetitorProductsPage: React.FC<CompetitorProductsPageProps> = ({ competi
         }
     };
 
-    // --- AI IMPORT LOGIC ---
+    // --- AI IMPORT LOGIC (CLIENT SIDE PROCESSING) ---
     const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -93,11 +93,13 @@ const CompetitorProductsPage: React.FC<CompetitorProductsPageProps> = ({ competi
             let extractedData: any;
 
             if (file.type === 'application/pdf') {
-                // 1. Upload & Extract Text from PDF
-                const url = await uploadFile(file, 'temp_docs');
-                const text = await extractPdfText(url);
+                // 1. Extract Text from PDF immediately (Client-side)
+                const text = await extractTextFromFile(file);
                 // 2. Send text to Gemini to parse JSON
                 extractedData = await analyzeCompetitorData(text, 'text/plain');
+                
+                // 3. Optional: Upload file for record keeping (if needed later)
+                // await uploadFile(file, 'temp_docs'); 
             } else if (file.type.startsWith('image/')) {
                 // 1. Convert Image to Base64
                 const reader = new FileReader();

@@ -78,7 +78,31 @@ const cleanText = (text: string): string => {
         .trim();
 };
 
+// --- NEW: EXTRACT DIRECTLY FROM FILE (IN MEMORY) ---
+// This bypasses CORS because it reads the file from local browser memory, not from a URL.
+export const extractTextFromFile = async (file: File): Promise<string> => {
+    try {
+        console.log("Reading PDF from memory...");
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        let fullText = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(' ');
+            fullText += `[Trang ${i}] ${pageText}\n`;
+        }
+        return cleanText(fullText);
+    } catch (e) {
+        console.error("Client File Extract Error", e);
+        return "";
+    }
+}
+
 // --- PDF EXTRACTION (HYBRID: CLIENT -> SERVER FALLBACK) ---
+// Kept for backward compatibility or when URL is the only source
 export const extractPdfText = async (fileUrl: string): Promise<string> => {
     // Cách 1: Thử đọc trực tiếp trên trình duyệt (Nhanh, miễn phí)
     try {

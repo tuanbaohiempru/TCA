@@ -130,7 +130,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 auto-rows-min">
             
             {/* 1. GREETING & HERO (Span 8) */}
-            <div className="col-span-12 md:col-span-8 bg-gradient-to-br from-pru-red to-red-700 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden animate-fade-in group">
+            <div className="col-span-12 md:col-span-8 bg-gradient-to-br from-pru-red to-red-700 rounded-3xl p-8 text-white shadow-xl shadow-red-200 dark:shadow-none relative overflow-hidden animate-fade-in group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
                 <div className="absolute bottom-0 left-0 w-40 h-40 bg-black/10 rounded-full -ml-10 -mb-10 blur-2xl"></div>
                 
@@ -160,7 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
             {/* 2. STATS & KPI (Span 4) */}
             <div className="col-span-12 md:col-span-4 grid grid-rows-2 gap-6">
                 {/* Active Contracts */}
-                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between hover:shadow-md transition animate-slide-up" style={{animationDelay: '0.1s'}}>
+                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-md border border-slate-200 dark:border-gray-800 flex items-center justify-between hover:shadow-lg transition animate-slide-up" style={{animationDelay: '0.1s'}}>
                     <div>
                         <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-xl mb-2">
                             <i className="fas fa-file-contract"></i>
@@ -178,7 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
                 </div>
 
                 {/* Upcoming Tasks */}
-                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between hover:shadow-md transition animate-slide-up" style={{animationDelay: '0.2s'}}>
+                <div className="bg-white dark:bg-pru-card rounded-3xl p-6 shadow-md border border-slate-200 dark:border-gray-800 flex items-center justify-between hover:shadow-lg transition animate-slide-up" style={{animationDelay: '0.2s'}}>
                     <div>
                         <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center text-xl mb-2">
                             <i className="fas fa-calendar-check"></i>
@@ -195,14 +195,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
             </div>
 
             {/* 3. TASK LIST (Span 4) */}
-            <div className="col-span-12 md:col-span-4 bg-white dark:bg-pru-card rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col h-full animate-slide-up" style={{animationDelay: '0.3s'}}>
+            <div className="col-span-12 md:col-span-4 bg-white dark:bg-pru-card rounded-3xl p-6 shadow-md border border-slate-200 dark:border-gray-800 flex flex-col h-full animate-slide-up" style={{animationDelay: '0.3s'}}>
                 <h3 className="font-bold text-gray-800 dark:text-white text-lg mb-4 flex items-center gap-2">
                     <i className="fas fa-tasks text-gray-400"></i> Việc cần làm
                 </h3>
                 
                 <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                     {fixedTasks.length > 0 ? fixedTasks.map(task => (
-                        <div key={task.id} className="group flex items-start gap-3 p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+                        <div key={task.id} className="group flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-gray-800 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-gray-700">
                             <div className="mt-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
                             <div className="flex-1">
                                 <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{task.time} - {task.title}</p>

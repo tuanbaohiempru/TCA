@@ -32,10 +32,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] dark:bg-[#0f0f0f] overflow-hidden font-sans selection:bg-red-500 selection:text-white">
+    <div className="flex h-screen bg-slate-100 dark:bg-[#0f0f0f] overflow-hidden font-sans selection:bg-red-500 selection:text-white">
       
       {/* 1. DESKTOP SIDEBAR (Floating Style) */}
-      <aside className="hidden md:flex flex-col w-72 m-4 mr-0 rounded-3xl bg-white dark:bg-[#1a1a1a] shadow-xl border border-gray-100 dark:border-gray-800 z-30 transition-all duration-300 relative overflow-hidden">
+      <aside className="hidden md:flex flex-col w-72 m-4 mr-0 rounded-3xl bg-white dark:bg-[#1a1a1a] shadow-2xl border border-slate-200 dark:border-gray-800 z-30 transition-all duration-300 relative overflow-hidden">
         {/* Decorative Blur */}
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-red-50 to-transparent dark:from-red-900/10 pointer-events-none"></div>
 
@@ -56,12 +56,12 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 to={item.path}
                 className={`flex items-center px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
                   isActive(item.path)
-                    ? 'bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-transparent text-pru-red shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-transparent text-pru-red shadow-sm border border-red-100 dark:border-transparent'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 transition-colors ${
-                    isActive(item.path) ? 'bg-white dark:bg-red-900/20 text-pru-red shadow-sm' : 'bg-transparent group-hover:bg-gray-100 dark:group-hover:bg-gray-700'
+                    isActive(item.path) ? 'bg-white dark:bg-red-900/20 text-pru-red shadow-sm' : 'bg-transparent group-hover:bg-white dark:group-hover:bg-gray-700'
                 }`}>
                     <i className={`fas ${item.icon} text-lg`}></i>
                 </div>
@@ -72,7 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
         </nav>
 
         <div className="p-4 mt-auto relative z-10">
-           <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+           <div className="bg-slate-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-slate-100 dark:border-gray-800 flex items-center gap-3">
              {user?.photoURL ? (
                  <img src={user.photoURL} alt="Avatar" className="w-10 h-10 rounded-xl border-2 border-white dark:border-gray-700 shadow-sm" />
              ) : (
@@ -152,7 +152,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 <div className="pointer-events-auto">
                     <button 
                         onClick={onToggleChat}
-                        className="w-14 h-14 rounded-full bg-gradient-to-br from-pru-red to-pink-600 text-white shadow-lg shadow-red-500/40 flex flex-col items-center justify-center transform transition-transform active:scale-95 border-4 border-gray-50 dark:border-gray-900 hover:scale-105"
+                        className="w-14 h-14 rounded-full bg-gradient-to-br from-pru-red to-pink-600 text-white shadow-lg shadow-red-500/40 flex flex-col items-center justify-center transform transition-transform active:scale-95 border-4 border-slate-100 dark:border-gray-900 hover:scale-105"
                     >
                         <i className="fas fa-robot text-lg mb-0.5 animate-pulse-slow"></i>
                         <span className="text-[9px] font-black leading-none">AI</span>

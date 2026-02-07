@@ -224,12 +224,12 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 tracking-tight">Quản lý Khách hàng</h1>
                 <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-                    <button onClick={() => setShowImportModal(true)} className="hidden md:flex bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition font-bold items-center whitespace-nowrap text-sm shadow-sm"><i className="fas fa-file-excel mr-2 text-green-600"></i>Nhập Excel</button>
+                    <button onClick={() => setShowImportModal(true)} className="hidden md:flex bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-slate-200 dark:border-gray-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 transition font-bold items-center whitespace-nowrap text-sm shadow-sm"><i className="fas fa-file-excel mr-2 text-green-600"></i>Nhập Excel</button>
                     
                     <button 
                         onClick={() => fileInputRef.current?.click()} 
                         disabled={isScanning}
-                        className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition font-bold flex items-center whitespace-nowrap text-sm disabled:opacity-70 shadow-sm"
+                        className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-slate-200 dark:border-gray-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 transition font-bold flex items-center whitespace-nowrap text-sm disabled:opacity-70 shadow-sm"
                     >
                         {isScanning ? <i className="fas fa-spinner fa-spin mr-2 text-blue-500"></i> : <i className="fas fa-camera mr-2 text-blue-500"></i>}
                         {isScanning ? 'Đang đọc...' : 'Quét CCCD'}
@@ -240,10 +240,10 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                 </div>
             </div>
             
-            <div className="bg-white dark:bg-pru-card p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-4 items-center transition-colors">
+            <div className="bg-white dark:bg-pru-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col md:flex-row gap-4 items-center transition-colors">
                 <div className="relative w-full md:w-1/3 group">
                     <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-pru-red transition-colors"></i>
-                    <input className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-pru-red/20 focus:border-pru-red outline-none bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-all" placeholder="Tìm tên, SĐT, CCCD..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-pru-red/20 focus:border-pru-red outline-none bg-slate-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-all" placeholder="Tìm tên, SĐT, CCCD..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </div>
                 <div className="flex gap-2 w-full md:w-auto overflow-x-auto scrollbar-hide">
                     <button onClick={() => setFilterStatus('all')} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition-all ${filterStatus === 'all' ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'}`}>Tất cả</button>
@@ -264,7 +264,7 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                         <div 
                             key={c.id} 
                             onClick={() => navigate(`/customers/${c.id}`)} 
-                            className="bg-white dark:bg-pru-card rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/50 transition-all duration-300 transform hover:-translate-y-1 group relative overflow-hidden flex flex-col h-full cursor-pointer"
+                            className="bg-white dark:bg-pru-card rounded-2xl shadow-md border border-slate-200 dark:border-gray-800 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden flex flex-col h-full cursor-pointer"
                         >
                             {/* Card Status Strip */}
                             <div className={`h-1.5 w-full ${c.status === CustomerStatus.SIGNED ? 'bg-green-500' : 'bg-yellow-400'}`}></div>
@@ -289,17 +289,17 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{c.job || c.occupation || 'Nghề nghiệp: --'}</p>
                                         <div className="flex items-center gap-1 mt-1">
                                             {contractCount > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">{contractCount} HĐ</span>}
-                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600">{c.status}</span>
+                                            <span className="text-[10px] bg-slate-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-600">{c.status}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2.5">
-                                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg">
+                                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 bg-slate-50 dark:bg-gray-800/50 p-2 rounded-lg">
                                         <div className="w-6 flex justify-center text-gray-400"><i className="fas fa-phone-alt text-xs"></i></div>
                                         <span className="font-medium">{c.phone || '---'}</span>
                                     </div>
-                                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg">
+                                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 bg-slate-50 dark:bg-gray-800/50 p-2 rounded-lg">
                                         <div className="w-6 flex justify-center text-gray-400"><i className="fas fa-coins text-xs"></i></div>
                                         <span className="font-medium">{c.analysis.incomeMonthly > 0 ? `${(c.analysis.incomeMonthly/1000000).toLocaleString()} Tr/tháng` : 'Chưa có TN'}</span>
                                     </div>
@@ -307,7 +307,7 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, contracts, app
                             </div>
 
                             {/* Quick Actions (Glassmorphism) */}
-                            <div className="grid grid-cols-4 border-t border-gray-100 dark:border-gray-800 divide-x divide-gray-100 dark:divide-gray-800 bg-gray-50/50 dark:bg-gray-800/30 backdrop-blur-sm">
+                            <div className="grid grid-cols-4 border-t border-slate-100 dark:border-gray-800 divide-x divide-slate-100 dark:divide-gray-800 bg-slate-50/50 dark:bg-gray-800/30 backdrop-blur-sm">
                                 <button onClick={(e) => { e.stopPropagation(); window.open(`tel:${c.phone}`) }} className="py-3 hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 transition flex justify-center items-center" title="Gọi điện">
                                     <i className="fas fa-phone-alt"></i>
                                 </button>

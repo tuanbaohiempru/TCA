@@ -20,8 +20,10 @@ import FinancialPlanning from './pages/FinancialPlanning';
 import OperationsPage from './pages/Operations';
 import MarketingPage from './pages/Marketing';
 import BusinessCard from './pages/BusinessCard';
+import CompetitorProductsPage from './pages/CompetitorProducts';
+import ProductBattlePage from './pages/ProductBattle'; // New Import
 
-import { AppState, Customer, Contract, Product, Appointment, AgentProfile, Illustration } from './types';
+import { AppState, Customer, Contract, Product, Appointment, AgentProfile, Illustration, CompetitorProduct } from './types';
 import { subscribeToCollection, addData, updateData, deleteData, COLLECTIONS } from './services/db';
 import { subscribeToAuth } from './services/auth';
 import { isFirebaseReady } from './services/firebaseConfig';
@@ -33,7 +35,7 @@ const App: React.FC = () => {
     const [authLoading, setAuthLoading] = useState(true);
 
     const [state, setState] = useState<AppState>({
-        customers: [], contracts: [], products: [], appointments: [], agentProfile: null, messageTemplates: [], illustrations: []
+        customers: [], contracts: [], products: [], appointments: [], agentProfile: null, messageTemplates: [], illustrations: [], competitorProducts: []
     });
 
     const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -52,7 +54,8 @@ const App: React.FC = () => {
                 appointments: INITIAL_APPOINTMENTS,
                 agentProfile: { id: 'demo-profile', fullName: 'Demo Agent', age: 28, address: 'Hà Nội', phone: '0987654321', email: 'demo@tuanchom.com', office: 'Prudential Plaza', agentCode: '60012345', title: 'MDRT 2024', bio: 'Chuyên gia tư vấn tài chính tận tâm.', targets: { weekly: 0, monthly: 0, quarterly: 0, yearly: 0 } },
                 messageTemplates: [],
-                illustrations: []
+                illustrations: [],
+                competitorProducts: []
             });
             setAuthLoading(false);
             return;
@@ -74,6 +77,7 @@ const App: React.FC = () => {
             subscribeToCollection(COLLECTIONS.APPOINTMENTS, (data) => setState(prev => ({ ...prev, appointments: data }))),
             subscribeToCollection(COLLECTIONS.MESSAGE_TEMPLATES, (data) => setState(prev => ({ ...prev, messageTemplates: data }))),
             subscribeToCollection(COLLECTIONS.ILLUSTRATIONS, (data) => setState(prev => ({ ...prev, illustrations: data }))),
+            subscribeToCollection(COLLECTIONS.COMPETITOR_PRODUCTS, (data) => setState(prev => ({ ...prev, competitorProducts: data }))),
             subscribeToCollection(COLLECTIONS.SETTINGS, (data) => { if (data && data.length > 0) setState(prev => ({ ...prev, agentProfile: data[0] as AgentProfile })); })
         ];
         return () => unsubs.forEach(unsub => unsub());
@@ -135,9 +139,8 @@ const App: React.FC = () => {
                         <Route path="/" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <Dashboard state={state} onUpdateContract={updateContract} onAddAppointment={addAppointment} onUpdateCustomer={updateCustomer} onUpdateAppointment={updateAppointment} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/customers" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/customers/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
-                        <Route path="/appointments" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        <Route path="/appointments" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AppointmentsPage appointments={state.appointments} customers={state.contracts} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
-                        {/* FIX: Explicitly Type callbacks for ContractsPage */}
                         <Route path="/contracts" element={ 
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
                                 <ContractsPage 
@@ -162,6 +165,21 @@ const App: React.FC = () => {
                         <Route path="/tools" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ToolsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/tools/finance" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <FinancialPlanning /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
+                        <Route path="/tools/competitors" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <CompetitorProductsPage competitorProducts={state.competitorProducts || []} /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
+
+                        {/* NEW: PRODUCT BATTLE */}
+                        <Route path="/tools/comparison" element={ 
+                            <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
+                                <ProductBattlePage competitorProducts={state.competitorProducts || []} /> 
+                                {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} 
+                            </Layout> 
+                        } />
+
                         <Route path="/tools/ops" element={ 
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
                                 <OperationsPage 

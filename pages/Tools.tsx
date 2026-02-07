@@ -21,6 +21,8 @@ const ToolsPage: React.FC = () => {
             items: [
                 { id: 'contracts', label: 'Quản lý Hợp đồng', icon: 'fa-file-signature', color: 'cyan', path: '/contracts' },
                 { id: 'ops', label: 'Smart Claim & Thẩm định', icon: 'fa-file-medical-alt', color: 'orange', path: '/tools/ops' },
+                { id: 'comparison', label: 'Đấu trường SP (Battle)', icon: 'fa-fist-raised', color: 'red', path: '/tools/comparison' }, // Updated
+                { id: 'competitors', label: 'Quản lý Data Đối thủ', icon: 'fa-database', color: 'gray', path: '/tools/competitors' }, // New Admin Link
                 { id: 'objections', label: 'Xử lý Từ chối (SOS)', icon: 'fa-fire-extinguisher', color: 'pink', path: '/tools/ops?tab=objections' },
             ]
         },
@@ -83,6 +85,9 @@ const ToolsPage: React.FC = () => {
                 
                 .bg-gray-50 { background-color: #f9fafb; }
                 .text-gray-600 { color: #4b5563; }
+
+                .bg-red-50 { background-color: #fef2f2; }
+                .text-red-600 { color: #dc2626; }
             `}</style>
         </div>
     );

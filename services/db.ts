@@ -10,7 +10,8 @@ const COLLECTIONS = {
     APPOINTMENTS: 'appointments',
     SETTINGS: 'settings', 
     MESSAGE_TEMPLATES: 'message_templates',
-    ILLUSTRATIONS: 'illustrations'
+    ILLUSTRATIONS: 'illustrations',
+    COMPETITOR_PRODUCTS: 'competitor_products' // New
 };
 
 // --- HELPER: SANITIZE DATA ---

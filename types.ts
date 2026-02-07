@@ -336,6 +336,30 @@ export interface Product {
   projectionConfig?: ProjectionConfig; 
 }
 
+// --- COMPETITOR ANALYSIS STRUCTURE ---
+export interface ComparisonFeatures {
+  limit_year?: string; // Hạn mức năm (Text to allow "5 tỷ" or "100 triệu")
+  room_board?: string; // Tiền giường
+  surgery?: string; // Phẫu thuật
+  cancer?: string; // Điều trị ung thư
+  copayment?: string; // Đồng chi trả
+  waiting_period?: string; // Thời gian chờ
+  scope?: string; // Phạm vi (VN, Á, Toàn cầu)
+  organ_transplant?: string; // Cấy ghép nội tạng
+  [key: string]: string | undefined; // Allow flexible keys
+}
+
+export interface CompetitorProduct {
+  id: string;
+  company: string; // Manulife, Dai-ichi...
+  productName: string; // Sống Khỏe Mỗi Ngày...
+  tier: string; // Titan, Gold, Diamond... (Mapped to Pru's Plans)
+  features: ComparisonFeatures;
+  pros: string[]; // Strong points against Pru
+  cons: string[]; // Weak points against Pru
+  lastUpdated: string;
+}
+
 export interface ContractProduct {
   productId: string;
   productName: string; 
@@ -501,5 +525,6 @@ export interface AppState {
   appointments: Appointment[];
   agentProfile: AgentProfile | null;
   messageTemplates: MessageTemplate[]; 
-  illustrations: Illustration[]; 
+  illustrations: Illustration[];
+  competitorProducts?: CompetitorProduct[]; // New
 }

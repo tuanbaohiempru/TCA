@@ -100,6 +100,113 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
     }
 };
 
+// --- COMPETITOR ANALYSIS (IMPORT) ---
+export const analyzeCompetitorData = async (textData: string, mimeType: string = 'text/plain') => {
+    const prompt = `
+    Bạn là một chuyên gia phân tích sản phẩm bảo hiểm.
+    Nhiệm vụ: Trích xuất thông tin từ tài liệu sản phẩm bảo hiểm của đối thủ cạnh tranh (hoặc bảng quyền lợi).
+    
+    Hãy trả về JSON format chuẩn xác với các trường sau:
+    {
+        "company": "Tên công ty bảo hiểm (VD: Manulife, Dai-ichi, AIA...)",
+        "productName": "Tên sản phẩm (VD: Sống Khỏe Mỗi Ngày)",
+        "tier": "Hạng thẻ/Gói (VD: Titan, Vàng, Kim Cương, Cao Cấp...)",
+        "features": {
+            "limit_year": "Hạn mức/Năm (Ghi rõ số tiền)",
+            "room_board": "Tiền giường/Ngày",
+            "surgery": "Phẫu thuật/Lần",
+            "cancer": "Điều trị ung thư (Chi trả ntn?)",
+            "copayment": "Đồng chi trả (Có/Không, Tỷ lệ)",
+            "waiting_period": "Thời gian chờ bệnh đặc biệt",
+            "scope": "Phạm vi bảo lãnh (VN/Châu Á/Toàn cầu)",
+            "organ_transplant": "Cấy ghép nội tạng"
+        },
+        "pros": ["Điểm mạnh 1", "Điểm mạnh 2"],
+        "cons": ["Điểm yếu 1", "Điểm yếu 2"]
+    }
+
+    Nếu thông tin nào không tìm thấy trong văn bản, hãy để trống hoặc ghi "Không đề cập".
+    Chỉ trả về JSON, không thêm markdown.
+    `;
+
+    // Construct content parts based on input type (text or image base64)
+    let contents: any[] = [];
+    if (mimeType.startsWith('image/')) {
+        contents = [
+            { text: prompt },
+            { inlineData: { mimeType: mimeType, data: textData } } // textData here is base64 string
+        ];
+    } else {
+        contents = [
+            { role: 'user', parts: [{ text: prompt + "\n\nNỘI DUNG TÀI LIỆU:\n" + textData }] }
+        ];
+    }
+
+    try {
+        if (clientAI) {
+            const req: any = {
+                model: 'gemini-2.5-flash',
+                contents: mimeType.startsWith('image/') ? [{ role: 'user', parts: contents }] : contents,
+                config: { responseMimeType: 'application/json' }
+            };
+            const response = await clientAI.models.generateContent(req);
+            return JSON.parse(response.text || '{}');
+        } else if (isFirebaseReady) {
+             // Fallback for image not supported well via simple text gateway yet, assume text mainly
+             const gateway = httpsCallable(functions, 'geminiGateway');
+             const result: any = await gateway({
+                endpoint: 'generateContent',
+                model: 'gemini-2.5-flash',
+                contents: mimeType.startsWith('image/') ? { parts: contents } : { parts: [{ text: prompt + "\n\nNỘI DUNG:\n" + textData }] },
+                config: { responseMimeType: 'application/json' }
+            });
+            return JSON.parse(result.data.text || '{}');
+        }
+    } catch (e) {
+        console.error("Analyze Competitor Error", e);
+        return null;
+    }
+};
+
+// --- BATTLE ADVISOR (NEW PHASE 3) ---
+export const analyzeProductBattle = async (pruFeatures: any, compFeatures: any, compName: string, compProduct: string) => {
+    const prompt = `
+    Bạn là "Su Sam Squad" - Chuyên gia huấn luyện bán hàng bảo hiểm Prudential (MDRT).
+    
+    NHIỆM VỤ:
+    So sánh thẻ sức khỏe Prudential (Hành Trang Vui Khỏe) với đối thủ: ${compName} - ${compProduct}.
+    Dựa trên dữ liệu so sánh dưới đây, hãy đưa ra chiến lược tư vấn để CHỐT SALE cho Prudential.
+
+    DỮ LIỆU PRUDENTIAL:
+    ${JSON.stringify(pruFeatures)}
+
+    DỮ LIỆU ĐỐI THỦ (${compName}):
+    ${JSON.stringify(compFeatures)}
+
+    YÊU CẦU ĐẦU RA (JSON FORMAT):
+    {
+        "disadvantages": [
+            { 
+                "point": "Điểm yếu/thua thiệt của Pru (VD: Phí cao hơn, Hạn mức thấp hơn...)", 
+                "script": "Lời thoại xử lý từ chối mẫu để biến điểm yếu thành điểm chấp nhận được (Reframing). Giọng văn chuyên nghiệp, đồng cảm." 
+            }
+        ],
+        "usp": "Điểm mạnh nhất (Unique Selling Point) của Pru trong kèo đấu này (VD: Bảo lãnh rộng, Cam kết tái tục, Thương hiệu uy tín...)",
+        "closing_script": "Một đoạn thoại ngắn (2-3 câu) chốt sale dựa trên USP đó, tạo sự khan hiếm hoặc thôi thúc hành động."
+    }
+    
+    Lưu ý: Nếu dữ liệu đối thủ thiếu, hãy giả định dựa trên kiến thức chung về thị trường bảo hiểm Việt Nam nhưng ghi chú là "Dựa trên giả định".
+    `;
+
+    try {
+        const jsonStr = await callGemini("Bạn là Chiến lược gia Bảo hiểm.", prompt, 'gemini-2.5-flash', 'application/json');
+        return JSON.parse(jsonStr || '{}');
+    } catch (e) {
+        console.error("Battle Analysis Error", e);
+        return null;
+    }
+};
+
 // --- ID CARD EXTRACTION ---
 export const extractIdentityCard = async (base64Image: string) => {
     const model = 'gemini-2.5-flash'; // Optimized for vision

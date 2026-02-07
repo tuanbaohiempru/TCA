@@ -150,8 +150,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
                         <button onClick={() => navigate('/customers')} className="bg-white text-pru-red px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition active:scale-95 flex items-center gap-2">
                             <i className="fas fa-plus"></i> Khách hàng mới
                         </button>
-                        <button onClick={() => navigate('/tools/finance')} className="bg-red-900/40 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-900/60 transition backdrop-blur-md border border-white/10 flex items-center gap-2">
-                            <i className="fas fa-calculator"></i> Minh họa nhanh
+                        <button onClick={() => navigate('/tools/finance')} className="bg-white text-pru-red px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition active:scale-95 flex items-center gap-2">
+                            <i className="fas fa-calculator"></i> Hoạch định tài chính
                         </button>
                     </div>
                 </div>

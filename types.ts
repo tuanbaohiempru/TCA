@@ -379,7 +379,9 @@ export enum ContractStatus {
   ACTIVE = 'Đang hiệu lực',
   LAPSED = 'Mất hiệu lực',
   PENDING = 'Chờ thẩm định',
-  MATURED = 'Đáo hạn'
+  MATURED = 'Đáo hạn',
+  GRACE_PERIOD = 'Gia hạn đóng phí (60 ngày)',
+  TERMINATED = 'Chấm dứt'
 }
 
 export enum PaymentFrequency {

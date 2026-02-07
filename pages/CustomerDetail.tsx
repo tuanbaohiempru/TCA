@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Contract, InteractionType, TimelineItem, ClaimRecord, ClaimStatus, CustomerDocument, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, PersonalityType, RelationshipType, ContractStatus, IssuanceType, FinancialStatus, ReadinessLevel, FinancialPriority, CustomerStatus, AssetType, LiabilityType, FinancialAsset, FinancialLiability } from '../types';
@@ -11,9 +12,10 @@ interface CustomerDetailProps {
     contracts: Contract[];
     onUpdateCustomer: (c: Customer) => Promise<void>;
     onAddCustomer: (c: Customer) => Promise<void>;
+    onUpdateContract?: (c: Contract) => Promise<void>; // Added
 }
 
-const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, onUpdateCustomer, onAddCustomer }) => {
+const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, onUpdateCustomer, onAddCustomer, onUpdateContract }) => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     
@@ -91,7 +93,37 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
 
     const handleAddClaim = async () => {
         if (!newClaim.amountRequest) return alert("Vui lòng nhập số tiền");
-        const item: ClaimRecord = { id: `cl_${Date.now()}`, dateSubmitted: newClaim.dateSubmitted || new Date().toISOString(), contractId: newClaim.contractId || '', benefitType: newClaim.benefitType || '', amountRequest: newClaim.amountRequest || 0, amountPaid: 0, status: ClaimStatus.PENDING, notes: newClaim.notes || '', documents: [] };
+        
+        // --- 4. Logic Ảnh hưởng của Claim đến Hợp đồng ---
+        // If Status is Approved and Benefit matches Critical conditions
+        if (newClaim.status === ClaimStatus.APPROVED && onUpdateContract) {
+            const benefit = (newClaim.benefitType || '').toLowerCase();
+            const isTerminatingEvent = benefit.includes('tử vong') || benefit.includes('thương tật toàn bộ');
+            
+            if (isTerminatingEvent && newClaim.contractId) {
+                const contract = contracts.find(c => c.id === newClaim.contractId);
+                if (contract && contract.status !== ContractStatus.TERMINATED) {
+                    if (window.confirm(`Sự kiện "${newClaim.benefitType}" có thể làm chấm dứt hợp đồng ${contract.contractNumber}. Bạn có muốn cập nhật trạng thái hợp đồng thành "Chấm dứt" không?`)) {
+                        await onUpdateContract({
+                            ...contract,
+                            status: ContractStatus.TERMINATED
+                        });
+                    }
+                }
+            }
+        }
+
+        const item: ClaimRecord = { 
+            id: `cl_${Date.now()}`, 
+            dateSubmitted: newClaim.dateSubmitted || new Date().toISOString(), 
+            contractId: newClaim.contractId || '', 
+            benefitType: newClaim.benefitType || '', 
+            amountRequest: newClaim.amountRequest || 0, 
+            amountPaid: newClaim.status === ClaimStatus.APPROVED ? newClaim.amountRequest || 0 : 0, 
+            status: newClaim.status || ClaimStatus.PENDING, 
+            notes: newClaim.notes || '', 
+            documents: [] 
+        };
         await onUpdateCustomer({ ...customer, claims: [item, ...(customer.claims || [])] });
         setIsAddingClaim(false);
     };
@@ -136,7 +168,6 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
         if (!hasEnoughData) return;
         setIsMagicScanning(true);
         try {
-            // Enhanced Prompt for MDRT Level Insight
             const prompt = `
             Đóng vai chuyên gia tâm lý khách hàng bảo hiểm (MDRT) - Su Sam Squad.
             
@@ -403,29 +434,30 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                                 <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
                                     <input className="input-field" placeholder="Loại quyền lợi (Nằm viện, CI...)" value={newClaim.benefitType} onChange={e => setNewClaim({...newClaim, benefitType: e.target.value})} />
                                     <CurrencyInput className="input-field" placeholder="Số tiền yêu cầu" value={newClaim.amountRequest || 0} onChange={v => setNewClaim({...newClaim, amountRequest: v})} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <select 
+                                            className="input-field py-2"
+                                            value={newClaim.contractId || ''} 
+                                            onChange={e => setNewClaim({...newClaim, contractId: e.target.value})}
+                                        >
+                                            <option value="">Chọn hợp đồng...</option>
+                                            {customerContracts.map(c => <option key={c.id} value={c.id}>{c.contractNumber}</option>)}
+                                        </select>
+                                        <select 
+                                            className="input-field py-2"
+                                            value={newClaim.status || ClaimStatus.PENDING}
+                                            onChange={e => setNewClaim({...newClaim, status: e.target.value as ClaimStatus})}
+                                        >
+                                            {Object.values(ClaimStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
                                     <div className="flex gap-2"><button onClick={handleAddClaim} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Lưu Claim</button><button onClick={() => setIsAddingClaim(false)} className="px-4 py-2 text-gray-500">Hủy</button></div>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {activeTab === 'docs' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white dark:bg-pru-card p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-sm">Hồ sơ sức khỏe</h4><label className="cursor-pointer text-pru-red text-xs font-bold"><i className="fas fa-upload"></i> Tải lên<input type="file" className="hidden" onChange={e => handleFileUpload(e, 'medical')} /></label></div>
-                                <div className="space-y-2">{customer.documents?.filter(d => d.category === 'medical').map(d => (
-                                    <a key={d.id} href={d.url} target="_blank" className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-red-50 transition"><i className={`fas ${d.type === 'pdf' ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'}`}></i><span className="text-xs truncate flex-1">{d.name}</span><i className="fas fa-external-link-alt text-[10px] text-gray-300"></i></a>
-                                ))}</div>
-                            </div>
-                            <div className="bg-white dark:bg-pru-card p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-sm">Hồ sơ cá nhân / Khác</h4><label className="cursor-pointer text-pru-red text-xs font-bold"><i className="fas fa-upload"></i> Tải lên<input type="file" className="hidden" onChange={e => handleFileUpload(e, 'personal')} /></label></div>
-                                <div className="space-y-2">{customer.documents?.filter(d => d.category === 'personal').map(d => (
-                                    <a key={d.id} href={d.url} target="_blank" className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-red-50 transition"><i className={`fas ${d.type === 'pdf' ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'}`}></i><span className="text-xs truncate flex-1">{d.name}</span><i className="fas fa-external-link-alt text-[10px] text-gray-300"></i></a>
-                                ))}</div>
-                            </div>
-                        </div>
-                    )}
-
+                    {/* ... other tabs ... */}
                     {activeTab === 'info' && (
                         <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
                              <h3 className="font-bold text-lg mb-6 border-b pb-2">Thông tin định danh 360°</h3>
@@ -439,7 +471,6 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Vai trò tài chính</label><p className="font-bold">{customer.financialRole}</p></div>
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Số người phụ thuộc</label><p className="font-bold">{customer.dependents} người</p></div>
                                 
-                                {/* Referrer Display */}
                                 {customer.referrerId && (
                                     <div className="md:col-span-2 p-3 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
                                         <label className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase block mb-1">
@@ -458,6 +489,23 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                                 <div><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Chiều cao / Cân nặng</label><p className="font-bold">{customer.health.height}cm / {customer.health.weight}kg</p></div>
                                 <div className="md:col-span-2"><label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Tiền sử bệnh tật</label><p className="font-bold text-red-600 italic">{customer.health.medicalHistory || 'Khỏe mạnh, không có tiền sử'}</p></div>
                              </div>
+                        </div>
+                    )}
+                    
+                    {activeTab === 'docs' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white dark:bg-pru-card p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-sm">Hồ sơ sức khỏe</h4><label className="cursor-pointer text-pru-red text-xs font-bold"><i className="fas fa-upload"></i> Tải lên<input type="file" className="hidden" onChange={e => handleFileUpload(e, 'medical')} /></label></div>
+                                <div className="space-y-2">{customer.documents?.filter(d => d.category === 'medical').map(d => (
+                                    <a key={d.id} href={d.url} target="_blank" className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-red-50 transition"><i className={`fas ${d.type === 'pdf' ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'}`}></i><span className="text-xs truncate flex-1">{d.name}</span><i className="fas fa-external-link-alt text-[10px] text-gray-300"></i></a>
+                                ))}</div>
+                            </div>
+                            <div className="bg-white dark:bg-pru-card p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-sm">Hồ sơ cá nhân / Khác</h4><label className="cursor-pointer text-pru-red text-xs font-bold"><i className="fas fa-upload"></i> Tải lên<input type="file" className="hidden" onChange={e => handleFileUpload(e, 'personal')} /></label></div>
+                                <div className="space-y-2">{customer.documents?.filter(d => d.category === 'personal').map(d => (
+                                    <a key={d.id} href={d.url} target="_blank" className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-red-50 transition"><i className={`fas ${d.type === 'pdf' ? 'fa-file-pdf text-red-500' : 'fa-file-image text-blue-500'}`}></i><span className="text-xs truncate flex-1">{d.name}</span><i className="fas fa-external-link-alt text-[10px] text-gray-300"></i></a>
+                                ))}</div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -484,7 +532,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                 </div>
             </div>
 
-            {/* MODALS (Included for consistency) */}
+            {/* MODALS */}
             {isEditModalOpen && (
                 <EditCustomerModal customer={customer} allCustomers={customers} onSave={async (updated) => { await onUpdateCustomer(updated); setIsEditModalOpen(false); }} onClose={() => setIsEditModalOpen(false)} />
             )}
@@ -505,7 +553,53 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     );
 };
 
-// Sub-components (unchanged, but required for context)
+// --- UPDATED: RECIPROCAL RELATIONSHIP MODAL ---
+const RelationshipModal: React.FC<{customer: Customer; allCustomers: Customer[]; onClose: () => void; onUpdate: (c: Customer) => Promise<void>; onAddCustomer: (c: Customer) => Promise<void>;}> = ({ customer, allCustomers, onClose, onUpdate }) => {
+    const [selectedRelated, setSelectedRelated] = useState<Customer | null>(null);
+    const [relType, setRelType] = useState<RelationshipType>(RelationshipType.OTHER);
+
+    const getInverseRelationship = (type: RelationshipType): RelationshipType => {
+        switch (type) {
+            case RelationshipType.SPOUSE: return RelationshipType.SPOUSE;
+            case RelationshipType.PARENT: return RelationshipType.CHILD;
+            case RelationshipType.CHILD: return RelationshipType.PARENT;
+            case RelationshipType.SIBLING: return RelationshipType.SIBLING;
+            default: return RelationshipType.OTHER;
+        }
+    };
+
+    const handleAdd = async () => { 
+        if (!selectedRelated) return; 
+        
+        // 1. Update Current Customer
+        const newRelForCurrent = { relatedCustomerId: selectedRelated.id, relationship: relType }; 
+        await onUpdate({ ...customer, relationships: [...(customer.relationships || []), newRelForCurrent] }); 
+        
+        // 2. Update Related Customer (Reciprocal)
+        const inverseRel = getInverseRelationship(relType);
+        const newRelForRelated = { relatedCustomerId: customer.id, relationship: inverseRel };
+        
+        // We need to fetch the fresh related customer object to ensure no overwrite? 
+        // In this local state setup, selectedRelated is from allCustomers prop which is fresh.
+        // BUT we need to call update on THAT customer.
+        // Assuming onUpdate can handle updating ANY customer if passed full object (which App.tsx usually does via ID matching)
+        
+        const updatedRelatedCustomer = {
+            ...selectedRelated,
+            relationships: [...(selectedRelated.relationships || []), newRelForRelated]
+        };
+        await onUpdate(updatedRelatedCustomer);
+
+        setSelectedRelated(null); 
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in backdrop-blur-sm">
+            <div className="bg-white dark:bg-pru-card rounded-xl max-w-lg w-full p-6 shadow-2xl transition-colors"><div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-2"><h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Quản lý Mối quan hệ</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fas fa-times text-xl"></i></button></div><div className="space-y-4 mb-6"><SearchableCustomerSelect customers={allCustomers.filter(c => c.id !== customer.id)} value={selectedRelated?.fullName || ''} onChange={setSelectedRelated} label="Chọn người thân" /><div><label className="label-text">Mối quan hệ (A là ... của B)</label><select className="input-field" value={relType} onChange={(e: any) => setRelType(e.target.value)}>{Object.values(RelationshipType).map(v => <option key={v} value={v}>{v}</option>)}</select></div><button onClick={handleAdd} className="w-full py-2 bg-pru-red text-white rounded-lg font-bold shadow-md hover:bg-red-700 transition">Thêm quan hệ</button></div><div className="max-h-40 overflow-y-auto space-y-2">{customer.relationships?.map((r, i) => { const relatedC = allCustomers.find(c => c.id === r.relatedCustomerId); return (<div key={i} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded"><span className="text-sm font-medium">{relatedC?.fullName}</span><span className="text-xs text-gray-500">{r.relationship}</span></div>); })}</div></div>
+        </div>
+    );
+};
+
 const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[]; onSave: (updated: Customer) => Promise<void>; onClose: () => void;}> = ({ customer, allCustomers, onSave, onClose }) => {
     const [formData, setFormData] = useState<Customer>({ ...customer });
     const [tab, setTab] = useState<'general' | 'health' | 'analysis'>('general');
@@ -526,7 +620,6 @@ const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[];
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fas fa-times text-xl"></i></button>
                 </div>
                 
-                {/* TABS IN MODAL */}
                 <div className="flex border-b border-gray-200 dark:border-gray-700 px-4">
                     <button onClick={() => setTab('general')} className={`py-3 px-4 text-sm font-bold border-b-2 transition ${tab === 'general' ? 'border-pru-red text-pru-red' : 'border-transparent text-gray-500'}`}>Thông tin chung</button>
                     <button onClick={() => setTab('health')} className={`py-3 px-4 text-sm font-bold border-b-2 transition ${tab === 'health' ? 'border-pru-red text-pru-red' : 'border-transparent text-gray-500'}`}>Sức khỏe</button>
@@ -554,18 +647,15 @@ const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[];
                                 <label className="label-text">Số người phụ thuộc</label>
                                 <input type="number" className="input-field" value={formData.dependents} onChange={e => setFormData({ ...formData, dependents: Number(e.target.value) })} />
                             </div>
-                            
-                            {/* NEW: Referrer Selection */}
                             <div className="md:col-span-1">
                                 <SearchableCustomerSelect 
-                                    customers={allCustomers.filter(c => c.id !== formData.id)} // Prevent self-referral
+                                    customers={allCustomers.filter(c => c.id !== formData.id)}
                                     value={allCustomers.find(c => c.id === formData.referrerId)?.fullName || ''}
                                     onChange={(c) => setFormData({ ...formData, referrerId: c.id })}
                                     label="Người giới thiệu"
                                     placeholder="Chọn người giới thiệu..."
                                 />
                             </div>
-
                             <div className="md:col-span-2"><label className="label-text">Địa chỉ</label><input className="input-field" value={formData.companyAddress} onChange={e => setFormData({ ...formData, companyAddress: e.target.value })} /></div>
                         </div>
                     )}
@@ -605,17 +695,6 @@ const EditCustomerModal: React.FC<{customer: Customer; allCustomers: Customer[];
                     <button onClick={() => onSave(formData)} className="px-5 py-2 bg-pru-red text-white font-bold rounded-lg hover:bg-red-700 shadow-md">Lưu thay đổi</button>
                 </div>
             </div>
-        </div>
-    );
-};
-
-const RelationshipModal: React.FC<{customer: Customer; allCustomers: Customer[]; onClose: () => void; onUpdate: (c: Customer) => Promise<void>; onAddCustomer: (c: Customer) => Promise<void>;}> = ({ customer, allCustomers, onClose, onUpdate }) => {
-    const [selectedRelated, setSelectedRelated] = useState<Customer | null>(null);
-    const [relType, setRelType] = useState<RelationshipType>(RelationshipType.OTHER);
-    const handleAdd = async () => { if (!selectedRelated) return; const newRel = { relatedCustomerId: selectedRelated.id, relationship: relType }; await onUpdate({ ...customer, relationships: [...(customer.relationships || []), newRel] }); setSelectedRelated(null); };
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in backdrop-blur-sm">
-            <div className="bg-white dark:bg-pru-card rounded-xl max-w-lg w-full p-6 shadow-2xl transition-colors"><div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-2"><h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Quản lý Mối quan hệ</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fas fa-times text-xl"></i></button></div><div className="space-y-4 mb-6"><SearchableCustomerSelect customers={allCustomers.filter(c => c.id !== customer.id)} value={selectedRelated?.fullName || ''} onChange={setSelectedRelated} label="Chọn người thân" /><div><label className="label-text">Mối quan hệ</label><select className="input-field" value={relType} onChange={(e: any) => setRelType(e.target.value)}>{Object.values(RelationshipType).map(v => <option key={v} value={v}>{v}</option>)}</select></div><button onClick={handleAdd} className="w-full py-2 bg-pru-red text-white rounded-lg font-bold shadow-md hover:bg-red-700 transition">Thêm quan hệ</button></div><div className="max-h-40 overflow-y-auto space-y-2">{customer.relationships?.map((r, i) => { const relatedC = allCustomers.find(c => c.id === r.relatedCustomerId); return (<div key={i} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded"><span className="text-sm font-medium">{relatedC?.fullName}</span><span className="text-xs text-gray-500">{r.relationship}</span></div>); })}</div></div>
         </div>
     );
 };

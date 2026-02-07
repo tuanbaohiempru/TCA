@@ -21,7 +21,7 @@ import OperationsPage from './pages/Operations';
 import MarketingPage from './pages/Marketing';
 import BusinessCard from './pages/BusinessCard';
 import CompetitorProductsPage from './pages/CompetitorProducts';
-import ProductBattlePage from './pages/ProductBattle'; // New Import
+import ProductBattlePage from './pages/ProductBattle'; 
 
 import { AppState, Customer, Contract, Product, Appointment, AgentProfile, Illustration, CompetitorProduct } from './types';
 import { subscribeToCollection, addData, updateData, deleteData, COLLECTIONS } from './services/db';
@@ -109,7 +109,6 @@ const App: React.FC = () => {
     const updateProduct = async (p: Product) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.map(x => x.id === p.id ? p : x)})); return; } await updateData(COLLECTIONS.PRODUCTS, p.id, p); };
     const deleteProduct = async (id: string) => { if(isDemo) { setState(prev => ({...prev, products: prev.products.filter(x => x.id !== id)})); return; } await deleteData(COLLECTIONS.PRODUCTS, id); };
 
-    // --- FIX: SMART SAVE PROFILE HANDLER ---
     const handleSaveProfile = async (p: AgentProfile) => {
         if (isDemo) {
             setState(prev => ({...prev, agentProfile: p}));
@@ -117,7 +116,6 @@ const App: React.FC = () => {
         }
         
         try {
-            // Check if profile exists (has ID) -> Update, else -> Create
             if (state.agentProfile && state.agentProfile.id) {
                 await updateData(COLLECTIONS.SETTINGS, state.agentProfile.id, p);
             } else {
@@ -138,7 +136,10 @@ const App: React.FC = () => {
                     <>
                         <Route path="/" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <Dashboard state={state} onUpdateContract={updateContract} onAddAppointment={addAppointment} onUpdateCustomer={updateCustomer} onUpdateAppointment={updateAppointment} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/customers" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomersPage customers={state.customers} contracts={state.contracts} appointments={state.appointments} onAdd={addCustomer} onUpdate={updateCustomer} onDelete={deleteCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
-                        <Route path="/customers/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
+                        {/* Passed onUpdateContract here */}
+                        <Route path="/customers/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <CustomerDetail customers={state.customers} contracts={state.contracts} onUpdateCustomer={updateCustomer} onAddCustomer={addCustomer} onUpdateContract={updateContract} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
+                        
                         <Route path="/appointments" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AppointmentsPage appointments={state.appointments} customers={state.customers} contracts={state.contracts} onAdd={addAppointment} onUpdate={updateAppointment} onDelete={deleteAppointment} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
                         <Route path="/contracts" element={ 
@@ -161,7 +162,6 @@ const App: React.FC = () => {
                         <Route path="/advisory/:id" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <AdvisoryPage customers={state.customers} contracts={state.contracts} agentProfile={state.agentProfile} onUpdateCustomer={updateCustomer} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/product-advisory" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ProductAdvisoryPage customers={state.customers} products={state.products} onSaveIllustration={saveIllustration} /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
-                        {/* TOOLS ROUTES */}
                         <Route path="/tools" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <ToolsPage /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         <Route path="/tools/finance" element={ <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> <FinancialPlanning /> {isChatOpen && <AIChat state={state} isOpen={true} setIsOpen={setIsChatOpen} />} </Layout> } />
                         
@@ -172,7 +172,6 @@ const App: React.FC = () => {
                             </Layout> 
                         } />
 
-                        {/* NEW: PRODUCT BATTLE */}
                         <Route path="/tools/comparison" element={ 
                             <Layout onToggleChat={() => setIsChatOpen(!isChatOpen)} user={user}> 
                                 <ProductBattlePage competitorProducts={state.competitorProducts || []} /> 

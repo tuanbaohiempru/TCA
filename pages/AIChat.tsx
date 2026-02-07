@@ -5,6 +5,7 @@ import { AppState, CustomerStatus, Gender, AppointmentType, AppointmentStatus, I
 import { chatWithData } from '../services/geminiService';
 import { addData, COLLECTIONS } from '../services/db';
 import { cleanMarkdownForClipboard } from '../components/Shared';
+import { useNavigate } from 'react-router-dom';
 
 interface AIChatProps {
   state: AppState;
@@ -21,6 +22,7 @@ declare global {
 
 const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const navigate = useNavigate();
   
   // Chat State
   const [query, setQuery] = useState('');
@@ -35,7 +37,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   const [attachment, setAttachment] = useState<string | null>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Voice State
+  // Voice Setup omitted for brevity, keeping existing functionality...
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -54,7 +56,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     }
   }, [isOpen, messages]);
 
-  // --- Reset Context Logic (Session Control) ---
   const handleResetChat = () => {
       if (window.confirm("Bắt đầu đoạn chat mới? (Lịch sử cũ sẽ bị xóa)")) {
           setMessages([DEFAULT_WELCOME]);
@@ -63,7 +64,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
       }
   };
 
-  // --- Voice Setup ---
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -87,7 +87,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     isListening ? recognitionRef.current.stop() : (setQuery(''), recognitionRef.current.start());
   };
 
-  // --- Image Handling ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -102,23 +101,21 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // --- Send Logic ---
   const handleSend = async (manualQuery?: string) => {
     const textToSend = manualQuery || query;
     if ((!textToSend.trim() && !attachment)) return;
 
     const userImage = attachment;
     
-    // UI Update: User Message
     const displayMsg = userImage ? `[Đã gửi 1 ảnh] ${textToSend}` : textToSend;
     
     setMessages(prev => [
         ...prev, 
         { role: 'user', text: displayMsg },
-        { role: 'model', text: '' } // Placeholder for streaming
+        { role: 'model', text: '' } 
     ]);
     
-    if (!manualQuery) setQuery(''); // Only clear if input manually
+    if (!manualQuery) setQuery(''); 
     setAttachment(null);
     setIsLoading(true);
 
@@ -140,13 +137,11 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
             }
         );
         
-        // Final update
         setMessages(prev => {
             const newMsgs = [...prev];
             const lastIndex = newMsgs.length - 1;
             if (lastIndex >= 0 && newMsgs[lastIndex].role === 'model') {
                 newMsgs[lastIndex].text = response.text; 
-                // Store action data if present for rendering UI
                 if (response.action) {
                     newMsgs[lastIndex].actionData = response.action;
                 }
@@ -172,7 +167,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
     }
   };
 
-  // --- Helper: Map Type string from AI to Enum ---
   const mapAppointmentType = (typeKey: string): AppointmentType => {
       switch (typeKey) {
           case 'FEE_REMINDER': return AppointmentType.FEE_REMINDER;
@@ -183,17 +177,40 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
       }
   };
 
-  // --- Action Execution ---
   const executeAction = async (action: any) => {
-      console.log("🔥 EXECUTE ACTION:", action); // DEBUG LOG
+      console.log("🔥 EXECUTE ACTION:", action);
 
       try {
           if (action.action === 'SELECT_CUSTOMER') {
-              // Do nothing here, UI will render options based on `actionData` in `messages`
-              // Logic is handled in render
+              // Action handled in render via buttons
           }
           else if (action.action === 'CREATE_CUSTOMER') {
               const { data } = action;
+              
+              // --- GATEKEEPER: CHECK FOR DUPLICATE CCCD ---
+              const normalizedId = data.idCard ? String(data.idCard).replace(/[\s\-\.]/g, '') : '';
+              if (normalizedId && normalizedId.length > 5) {
+                  const existingCustomer = state.customers.find(c => {
+                      const cId = c.idCard ? String(c.idCard).replace(/[\s\-\.]/g, '') : '';
+                      return cId === normalizedId;
+                  });
+
+                  if (existingCustomer) {
+                      setMessages(prev => [...prev, { 
+                          role: 'model', 
+                          text: `⚠️ **Phát hiện trùng lặp!**\nKhách hàng **${existingCustomer.fullName}** (CCCD: ${existingCustomer.idCard}) đã tồn tại trong hệ thống.\n\nEm đã hủy lệnh tạo mới và chuyển anh/chị đến hồ sơ của khách hàng này ngay bây giờ.`,
+                          isAction: true 
+                      }]);
+                      
+                      // Auto navigate after small delay
+                      setTimeout(() => {
+                          setIsOpen(false);
+                          navigate(`/customers/${existingCustomer.id}`);
+                      }, 2000);
+                      return;
+                  }
+              }
+
               const newCustomer: Customer = {
                   id: '', 
                   fullName: data.fullName,
@@ -214,22 +231,18 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
           else if (action.action === 'CREATE_APPOINTMENT') {
               const { data } = action;
               
-              // Validate Data
               if (!data.date || !data.time || !data.customerName) {
                   throw new Error("Dữ liệu lịch hẹn không đầy đủ (Thiếu ngày/giờ/tên).");
               }
 
-              // Find Customer
               const customer = state.customers.find(c => c.fullName.toLowerCase().includes(data.customerName.toLowerCase()));
-              
-              // Determine Type from AI data or default
               const appType = mapAppointmentType(data.type);
 
               await addData(COLLECTIONS.APPOINTMENTS, {
                   customerId: customer?.id || 'unknown',
                   customerName: data.customerName,
-                  date: data.date, // Format YYYY-MM-DD from Gemini
-                  time: data.time, // Format HH:mm from Gemini
+                  date: data.date, 
+                  time: data.time, 
                   type: appType,
                   status: AppointmentStatus.UPCOMING,
                   note: data.title || 'Lịch hẹn từ AI'
@@ -243,15 +256,13 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   };
 
   const handleSelection = (candidate: any) => {
-      // Send a hidden message to AI indicating selection
-      // This helps AI context know who was picked so it can proceed
       const selectionText = `Tôi chọn: ${candidate.name} (ID: ${candidate.id}). Hãy tiếp tục thực hiện yêu cầu cho khách hàng này.`;
       handleSend(selectionText);
   };
 
   const containerClasses = isExpanded
     ? "fixed inset-0 md:left-auto md:top-0 md:right-0 md:w-[500px] md:h-full w-full h-full bg-white shadow-2xl flex flex-col border-l border-gray-200 z-[200] transition-all duration-300" 
-    : "fixed bottom-28 right-8 w-[350px] h-[550px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 overflow-hidden transform transition-all z-[200]"; // CHANGED: top-20 right-4 -> bottom-28 right-8
+    : "fixed bottom-28 right-8 w-[350px] h-[550px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 overflow-hidden transform transition-all z-[200]";
 
   if (!isOpen) return null;
 
@@ -272,7 +283,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                 </div>
             </div>
             <div className="flex gap-1 items-center">
-                 {/* RESET BUTTON */}
                  <button onClick={handleResetChat} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded text-white/80 hover:text-white transition" title="Đoạn chat mới">
                     <i className="fas fa-eraser"></i>
                  </button>
@@ -298,7 +308,6 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                     </div>
                 </div>
 
-                {/* RENDER SELECTION CARDS IF ACTION IS SELECT_CUSTOMER */}
                 {msg.actionData && msg.actionData.action === 'SELECT_CUSTOMER' && (
                     <div className="ml-10 mt-2 grid grid-cols-1 gap-2 w-[85%] animate-fade-in">
                         {msg.actionData.data.candidates.map((c: any, cIdx: number) => (

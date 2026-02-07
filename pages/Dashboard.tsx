@@ -72,7 +72,39 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
         });
     });
 
-    // 2. SCAN FOR WEEKLY PREPARATION
+    // 2. SCAN CONTRACTS FOR FEE REMINDERS & GRACE PERIOD
+    contracts.forEach(c => {
+        if (c.status === ContractStatus.ACTIVE || c.status === ContractStatus.GRACE_PERIOD) {
+            const dueDate = new Date(c.nextPaymentDate);
+            const diffTime = today.getTime() - dueDate.getTime();
+            const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // If overdue but within 60 days -> Grace Period Task
+            if (daysOverdue > 0 && daysOverdue <= 60) {
+                const cus = customers.find(cus => cus.id === c.customerId);
+                fixed.push({
+                    id: `grace-${c.id}`, time: 'Cấp bách', type: 'appointment', category: 'Thu phí', priority: 'urgent',
+                    score: 99, title: `Thu phí (Gia hạn ${daysOverdue}/60 ngày)`,
+                    why: `HĐ ${c.contractNumber} sắp mất hiệu lực!`,
+                    actionLabel: 'Gọi ngay', actionIcon: 'fa-phone',
+                    customer: cus || null, status: AppointmentStatus.UPCOMING
+                });
+            }
+            // If overdue > 60 days -> Lapsed Warning
+            else if (daysOverdue > 60) {
+                const cus = customers.find(cus => cus.id === c.customerId);
+                fixed.push({
+                    id: `lapsed-${c.id}`, time: 'Cảnh báo', type: 'appointment', category: 'Khôi phục', priority: 'urgent',
+                    score: 100, title: `HĐ ${c.contractNumber} Mất hiệu lực`,
+                    why: `Đã quá hạn ${daysOverdue} ngày. Cần khôi phục ngay.`,
+                    actionLabel: 'Hỗ trợ', actionIcon: 'fa-tools',
+                    customer: cus || null, status: AppointmentStatus.UPCOMING
+                });
+            }
+        }
+    });
+
+    // 3. SCAN FOR WEEKLY PREPARATION
     customers.forEach(cus => {
         if (cus.dob) {
             const dob = new Date(cus.dob);
@@ -90,7 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
         }
     });
 
-    // 3. OPPORTUNITY SIGNALS
+    // 4. OPPORTUNITY SIGNALS
     customers.forEach(cus => {
         const cusContracts = contracts.filter(c => c.customerId === cus.id && c.status === ContractStatus.ACTIVE);
         const totalSA = cusContracts.reduce((sum, c) => sum + (c.mainProduct?.sumAssured || 0), 0);
@@ -106,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
     });
 
     return { 
-        fixedTasks: fixed.sort((a, b) => a.time.localeCompare(b.time)),
+        fixedTasks: fixed.sort((a, b) => (b.priority === 'urgent' ? 1 : 0) - (a.priority === 'urgent' ? 1 : 0) || a.time.localeCompare(b.time)),
         opportunitySignals: signals,
         weeklyPreps: preps.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0)),
         kpiStats: { monthlyPremium }
@@ -116,6 +148,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
   const executeAction = async (task: ScheduledTask) => {
       if (task.actionIcon === 'fa-gift') {
           window.open(`https://shopee.vn/search?keyword=quà tặng`, '_blank');
+          return;
+      }
+      if (task.actionIcon === 'fa-phone' && task.customer) {
+          window.open(`tel:${task.customer.phone}`);
           return;
       }
       if (task.type === 'appointment') navigate(`/appointments`);
@@ -202,14 +238,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
                 
                 <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                     {fixedTasks.length > 0 ? fixedTasks.map(task => (
-                        <div key={task.id} className="group flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-gray-800 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-gray-700">
-                            <div className="mt-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                        <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-gray-800 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-gray-700 ${task.priority === 'urgent' ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30' : ''}`}>
+                            <div className={`mt-1 w-2 h-2 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)] ${task.priority === 'urgent' ? 'bg-red-600 animate-pulse' : 'bg-blue-500'}`}></div>
                             <div className="flex-1">
-                                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{task.time} - {task.title}</p>
+                                <p className={`font-bold text-sm ${task.priority === 'urgent' ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{task.time} - {task.title}</p>
                                 <p className="text-xs text-gray-500 line-clamp-1">{task.why}</p>
                             </div>
                             <button onClick={() => executeAction(task)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition">
-                                <i className="fas fa-chevron-right"></i>
+                                <i className={`fas ${task.actionIcon === 'fa-phone' ? 'fa-phone' : 'fa-chevron-right'}`}></i>
                             </button>
                         </div>
                     )) : (
@@ -280,7 +316,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
 
         </div>
 
-        {/* AI Script Modal (Kept simple for now) */}
+        {/* AI Script Modal */}
         {scriptModal.isOpen && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white dark:bg-pru-card p-6 rounded-3xl max-w-md w-full">

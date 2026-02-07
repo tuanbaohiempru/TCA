@@ -14,10 +14,10 @@ const getApiKey = (): string => {
 };
 
 const apiKey = getApiKey();
-// Client-side instance (Use with caution, prefer Cloud Functions for production)
 const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-// OPTIMIZATION: Use Flash model for faster response (1-2s)
+// MODEL STRATEGY: 
+// Use Flash for high speed & large context (1M tokens) allowing full PDF injection at low cost.
 const DEFAULT_MODEL = 'gemini-2.5-flash'; 
 
 // --- GENERIC HELPERS ---
@@ -34,10 +34,9 @@ const callGemini = async (systemInstruction: string, prompt: string | any, model
                 tools: tools,
                 config: {
                     responseMimeType: responseMimeType,
-                    temperature: 0.7
+                    temperature: 0.1 // Ultra-low temperature for factual consistency
                 }
             });
-            // Handle Function Call response from Cloud Function if needed
             return result.data.text; 
         } catch (e) {
             console.warn("Cloud Function failed, falling back to client-side if key exists.", e);
@@ -52,17 +51,14 @@ const callGemini = async (systemInstruction: string, prompt: string | any, model
             config: {
                 systemInstruction: systemInstruction,
                 responseMimeType: responseMimeType,
-                temperature: 0.7,
+                temperature: 0.1, // Strict factual mode
                 tools: tools.length > 0 ? tools : undefined
             }
         };
 
         const response = await clientAI.models.generateContent(req);
         
-        // Handle Function Calls (Client Side)
         if (response.functionCalls && response.functionCalls.length > 0) {
-            // For simplicity in this demo, we return the function call data directly
-            // In a full loop, we would execute the function and call Gemini again
             return JSON.stringify({ functionCall: response.functionCalls[0] });
         }
 
@@ -72,7 +68,16 @@ const callGemini = async (systemInstruction: string, prompt: string | any, model
     throw new Error("Không thể kết nối AI. Vui lòng kiểm tra API Key hoặc Cloud Functions.");
 };
 
-// --- PDF EXTRACTION (CLIENT-SIDE COST SAVING) ---
+// --- DATA CLEANING (SƠ CHẾ DỮ LIỆU) ---
+const cleanText = (text: string): string => {
+    return text
+        .replace(/\s+/g, ' ') // Thay thế nhiều khoảng trắng/newline liên tiếp bằng 1 khoảng trắng
+        .replace(/Trang \d+\/\d+/gi, '') // Xóa số trang (VD: Trang 1/50)
+        .replace(/Page \d+ of \d+/gi, '') // Xóa số trang tiếng Anh
+        .trim();
+};
+
+// --- PDF EXTRACTION ---
 export const extractPdfText = async (fileUrl: string): Promise<string> => {
     try {
         console.log("Starting Client-side PDF Extraction...");
@@ -80,55 +85,90 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
         const pdf = await loadingTask.promise;
         let fullText = '';
 
-        const maxPages = Math.min(pdf.numPages, 15); // Increased limit slightly
+        // PRIORITY 1: ACCURACY - READ ALL PAGES
+        const maxPages = pdf.numPages; 
 
         for (let i = 1; i <= maxPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
+            // Join items with space, then clean later
             const pageText = textContent.items.map((item: any) => item.str).join(' ');
             fullText += `[Trang ${i}] ${pageText}\n`;
         }
 
-        if (pdf.numPages > 15) {
-            fullText += `\n... (Đã cắt bớt ${pdf.numPages - 15} trang còn lại)`;
-        }
-
-        return fullText;
+        // Sơ chế dữ liệu trước khi trả về
+        return cleanText(fullText);
     } catch (e) {
         console.error("Client-side PDF Extract Error:", e);
         return "Lỗi đọc file PDF. Vui lòng đảm bảo file có thể truy cập công khai hoặc CORS được cấu hình đúng.";
     }
 };
 
+// --- FUZZY MATCH ALGORITHM (THUẬT TOÁN TÌM KIẾM MỜ) ---
+const calculateMatchScore = (query: string, productName: string, productCode: string): number => {
+    const q = query.toLowerCase();
+    const n = productName.toLowerCase();
+    const c = productCode.toLowerCase();
+
+    // 1. Exact Code Match: Highest Score
+    if (q.includes(c)) return 100;
+
+    // 2. Token Overlap Match
+    const queryTokens = q.split(/\s+/).filter(t => t.length > 2); // Ignore short words
+    const nameTokens = n.split(/\s+/);
+    
+    let matchedTokens = 0;
+    queryTokens.forEach(qt => {
+        if (nameTokens.some(nt => nt.includes(qt))) matchedTokens++;
+    });
+
+    if (queryTokens.length === 0) return 0;
+    
+    // Score = Percentage of matched tokens
+    return (matchedTokens / queryTokens.length) * 100;
+};
+
 // --- SMART RETRIEVAL HELPER ---
-/**
- * Finds relevant product details based on user query.
- * Only injects full PDF content if the product name is mentioned or context implies it.
- */
 const getRelevantProductKnowledge = (query: string, products: Product[]): string => {
-    const queryLower = query.toLowerCase();
-    let knowledge = "";
+    // 1. Filter products with relevant scores
+    const relevantProducts = products.map(p => ({
+        product: p,
+        score: calculateMatchScore(query, p.name, p.code)
+    })).filter(item => item.score > 30); // Threshold: Match at least 30% keywords
 
-    // 1. Identify mentioned products
-    const mentionedProducts = products.filter(p => 
-        queryLower.includes(p.name.toLowerCase()) || 
-        queryLower.includes(p.code.toLowerCase())
-    );
-
-    if (mentionedProducts.length > 0) {
-        knowledge += "\n*** CHI TIẾT SẢN PHẨM LIÊN QUAN (ĐƯỢC TRÍCH XUẤT TỪ TÀI LIỆU): ***\n";
-        mentionedProducts.forEach(p => {
-            if (p.extractedContent) {
-                // Limit content length to avoid token overflow if many products match
-                const safeContent = p.extractedContent.substring(0, 15000); 
-                knowledge += `\n--- SẢN PHẨM: ${p.name} (${p.code}) ---\n${safeContent}\n`;
-            } else {
-                knowledge += `\n--- SẢN PHẨM: ${p.name} ---\n(Chưa có nội dung chi tiết PDF, chỉ có mô tả: ${p.description})\n`;
-            }
-        });
+    // 2. Special Case: Alias mapping (Hardcoded for common terms)
+    if (query.toLowerCase().includes('thẻ sức khỏe') || query.toLowerCase().includes('y tế')) {
+        const healthCard = products.find(p => p.name.includes('Hành Trang') || p.name.includes('Sức khỏe'));
+        if (healthCard && !relevantProducts.some(rp => rp.product.id === healthCard.id)) {
+            relevantProducts.push({ product: healthCard, score: 90 });
+        }
     }
 
-    return knowledge;
+    if (relevantProducts.length > 0) {
+        // Sort by relevance
+        relevantProducts.sort((a, b) => b.score - a.score);
+        
+        console.log("AI Detected Products:", relevantProducts.map(rp => rp.product.name));
+        
+        let context = "\n*** KHO TÀI LIỆU CHÍNH THỨC (ĐƯỢC ƯU TIÊN SỐ 1) ***\n";
+        
+        relevantProducts.forEach(({ product }) => {
+            if (product.extractedContent) {
+                // Optimization: Gemini 2.5 Flash context is huge, we can send almost everything.
+                // Limit to 200k chars per product to be safe with multiple products.
+                const safeContent = product.extractedContent.length > 200000 
+                    ? product.extractedContent.substring(0, 200000) + "\n...(Cắt bớt)..."
+                    : product.extractedContent;
+                    
+                context += `\n>>> QUY TẮC SẢN PHẨM: ${product.name} (Mã: ${product.code}) <<<\n${safeContent}\n--------------------\n`;
+            } else {
+                context += `\n>>> SẢN PHẨM: ${product.name} <<<\n(Chưa có tài liệu PDF chi tiết. Chỉ có mô tả: ${product.description})\n`;
+            }
+        });
+        return context;
+    }
+
+    return "";
 };
 
 // --- COMPETITOR ANALYSIS (IMPORT) ---
@@ -279,73 +319,52 @@ export const chatWithData = async (
     onStream?: (chunk: string) => void
 ): Promise<{ text: string; action?: any }> => {
     
-    // 1. Prepare Core Context
-    const customerSummary = state.customers.map(c => `- ${c.fullName} (ID:${c.id}, Phone:${c.phone}) [Trạng thái: ${c.status}]`).join('\n');
-    const contractSummary = state.contracts.map(c => `- HĐ ${c.contractNumber} (${c.mainProduct.productName}) của KH ${c.customerId}. Phí: ${c.totalFee.toLocaleString()}đ. Trạng thái: ${c.status}`).join('\n');
-    
-    // 2. Prepare Product Context (Summary List)
+    // 1. Prepare Core Context (Lite Version)
+    const customerSummary = state.customers.slice(0, 20).map(c => `- ${c.fullName} (Phone: ${c.phone})`).join('\n');
     const productSummary = state.products.map(p => `- [${p.code}] ${p.name}: ${p.description}`).join('\n');
 
-    // 3. Smart Retrieval (Inject Detail Content if Relevant)
+    // 2. SMART RETRIEVAL (With Fuzzy Match)
     const detailedProductKnowledge = getRelevantProductKnowledge(query, state.products);
 
     const context = `
-    === KHO DỮ LIỆU ===
-    A. DANH SÁCH KHÁCH HÀNG:
-    ${customerSummary}
-
-    B. DANH SÁCH HỢP ĐỒNG:
-    ${contractSummary}
-
-    C. DANH SÁCH SẢN PHẨM HIỆN CÓ:
+    === KHO DỮ LIỆU CƠ BẢN ===
+    A. SẢN PHẨM HIỆN CÓ (TÓM TẮT):
     ${productSummary}
+
+    B. DANH SÁCH KHÁCH HÀNG (20 GẦN NHẤT):
+    ${customerSummary}
 
     ${detailedProductKnowledge}
     
-    === YÊU CẦU NGƯỜI DÙNG ===
+    === YÊU CẦU CỦA USER ===
     "${query}"
     `;
 
-    // 4. Define SU SAM SQUAD System Instruction
+    // 3. FIREWALL & SYSTEM INSTRUCTION
     const systemInstruction = `
-    Bạn là **Su Sam Squad** - Đội ngũ trợ lý AI chuyên nghiệp cho Tư vấn viên Prudential.
-    Bạn có 5 nhân cách chuyên môn. Hãy tự động nhận diện ý định người dùng để chọn nhân cách trả lời phù hợp nhất:
+    Bạn là **Su Sam Squad** - Trợ lý AI chuyên nghiệp của Prudential.
+    
+    🔥 BỨC TƯỜNG LỬA (FIREWALL) - QUY TẮC BẤT KHẢ XÂM PHẠM:
+    1. **NGUỒN DỮ LIỆU:** Khi trả lời về điều khoản/quyền lợi sản phẩm, BẮT BUỘC phải dựa trên phần "KHO TÀI LIỆU CHÍNH THỨC" được cung cấp ở trên.
+    2. **KHÔNG SUY ĐOÁN:** Nếu tài liệu không đề cập rõ ràng, hãy trả lời: "Trong tài liệu hiện tại chưa có thông tin chi tiết về vấn đề này. Vui lòng kiểm tra lại file quy tắc sản phẩm."
+    3. **TRÍCH DẪN:** Khi trả lời, hãy cố gắng ghi rõ "Theo mục..." hoặc "Được quy định tại..." để tăng độ tin cậy.
+    4. **THỜI GIAN THỰC:** Hôm nay là ${new Date().toLocaleDateString('vi-VN')}.
 
-    1. **SUSAM_SALES (Chuyên gia Bán hàng):** 
-       - Dùng khi: Hỏi về tư vấn, khơi gợi nhu cầu, chốt sale, so sánh sản phẩm.
-       - Phong cách: Máu lửa, tập trung vào lợi ích, dùng kỹ thuật storytelling.
-       - Nhiệm vụ: Gợi ý sản phẩm phù hợp dựa trên data khách hàng.
+    ĐỊNH HÌNH NHÂN CÁCH (TỰ ĐỘNG CHỌN):
+    - **SUSAM_EXPERT (Mặc định khi hỏi SP):** Chuyên gia sản phẩm. Trả lời chính xác, trích dẫn luật.
+    - **SUSAM_ADMIN:** Khi yêu cầu tạo/sửa dữ liệu (Dùng Tool).
+    - **SUSAM_SALES:** Khi nhờ tư vấn khơi gợi nhu cầu (Dùng kiến thức MDRT).
 
-    2. **SUSAM_EXPERT (Luật sư/Chuyên gia SP):**
-       - Dùng khi: Hỏi chi tiết về điều khoản, quyền lợi, loại trừ, định nghĩa bệnh.
-       - Phong cách: Chính xác, trích dẫn rõ ràng (Dựa trên dữ liệu sản phẩm chi tiết được cung cấp).
-       - *Lưu ý:* Nếu không có dữ liệu chi tiết trong context, hãy báo người dùng upload PDF sản phẩm.
-
-    3. **SUSAM_CRM (Quản gia):**
-       - Dùng khi: Hỏi về thông tin khách hàng, nhắc lịch, sinh nhật, đóng phí.
-       - Phong cách: Chu đáo, tận tâm, rà soát kỹ dữ liệu ngày tháng.
-
-    4. **SUSAM_ADMIN (Thư ký):**
-       - Dùng khi: Yêu cầu tạo hồ sơ, đặt lịch hẹn, nhập liệu.
-       - Hành động: Luôn ưu tiên dùng Tool (create_customer, create_appointment).
-
-    5. **SUSAM_COACH (Huấn luyện viên):**
-       - Dùng khi: Người dùng than vãn bị từ chối, xin lời khuyên xử lý tình huống.
-       - Phong cách: Đồng cảm, đưa ra lời thoại mẫu (Script) để TVV áp dụng ngay.
-
-    QUY TẮC CHUNG:
-    - Luôn trả lời ngắn gọn, đi thẳng vào vấn đề.
-    - Định dạng văn bản đẹp (Markdown: Bold, Bullet points).
-    - Nếu cần tạo dữ liệu, HÃY GỌI TOOL.
+    HÃY TRẢ LỜI NGẮN GỌN, TRỰC DIỆN.
     `;
 
-    // 5. Define Tools
+    // 4. Define Tools
     const tools: Tool[] = [
         {
             functionDeclarations: [
                 {
                     name: "create_customer",
-                    description: "Tạo hồ sơ khách hàng mới. Nếu thông tin bị trùng, hệ thống sẽ tự xử lý.",
+                    description: "Tạo hồ sơ khách hàng mới.",
                     parameters: {
                         type: Type.OBJECT,
                         properties: {
@@ -378,43 +397,35 @@ export const chatWithData = async (
         }
     ];
 
-    // 6. Construct Request
+    // 5. Construct Request
     const parts: any[] = [{ text: context }];
     if (imageBase64) {
         parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
-        parts.push({ text: "Hãy đóng vai SUSAM_ADMIN, trích xuất thông tin từ ảnh này để thực hiện yêu cầu." });
+        parts.push({ text: "Hãy đóng vai SUSAM_ADMIN, trích xuất thông tin từ ảnh này." });
     }
 
     try {
-        // Use clientAI for Tool calling demonstration (Simpler than mocking Cloud Function tool handling)
         if (clientAI) {
             const result: any = await clientAI.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: parts }],
                 config: { 
                     systemInstruction: systemInstruction,
-                    temperature: 0.5,
-                    tools: tools // Attach tools
+                    temperature: 0.1, // Low temp for factual accuracy
+                    tools: tools
                 }
             });
 
-            // Check for Function Call
             const fc = result.functionCalls?.[0];
             if (fc) {
-                console.log("AI Function Call:", fc);
-                if (fc.name === 'create_customer') {
-                    return { text: "Đang tạo hồ sơ khách hàng...", action: { action: 'CREATE_CUSTOMER', data: fc.args } };
-                }
-                if (fc.name === 'create_appointment') {
-                    return { text: "Đang đặt lịch hẹn...", action: { action: 'CREATE_APPOINTMENT', data: fc.args } };
-                }
+                if (fc.name === 'create_customer') return { text: "Đang tạo hồ sơ...", action: { action: 'CREATE_CUSTOMER', data: fc.args } };
+                if (fc.name === 'create_appointment') return { text: "Đang đặt lịch...", action: { action: 'CREATE_APPOINTMENT', data: fc.args } };
             }
 
             return { text: result.text || "Xin lỗi, tôi chưa hiểu ý bạn.", action: null };
         } 
         
-        // Simple text fallback if no clientAI
-        return { text: "Hệ thống AI chưa được cấu hình đầy đủ (Client Mode).", action: null };
+        return { text: "Hệ thống AI chưa được cấu hình đầy đủ.", action: null };
 
     } catch (e: any) {
         console.error("Chat Error", e);
@@ -503,7 +514,7 @@ export const checkPreUnderwriting = async (condition: string) => {
 };
 
 export const analyzeClaimSupport = async (contract: Contract, product: Product | undefined, eventDescription: string) => {
-    const context = product?.extractedContent ? `CHI TIẾT SẢN PHẨM: ${product.extractedContent.substring(0, 10000)}` : `Mô tả sản phẩm: ${product?.description}`;
+    const context = product?.extractedContent ? `CHI TIẾT SẢN PHẨM: ${product.extractedContent.substring(0, 300000)}` : `Mô tả sản phẩm: ${product?.description}`;
     
     const prompt = `
     Bạn là SUSAM_EXPERT (Claim Mode).

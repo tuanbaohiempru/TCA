@@ -251,7 +251,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
 
   const containerClasses = isExpanded
     ? "fixed inset-0 md:left-auto md:top-0 md:right-0 md:w-[500px] md:h-full w-full h-full bg-white shadow-2xl flex flex-col border-l border-gray-200 z-[200] transition-all duration-300" 
-    : "fixed top-20 right-4 md:right-6 w-[350px] h-[550px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 overflow-hidden transform transition-all z-[200]";
+    : "fixed bottom-28 right-8 w-[350px] h-[550px] bg-white rounded-2xl shadow-2xl flex flex-col border border-gray-200 overflow-hidden transform transition-all z-[200]"; // CHANGED: top-20 right-4 -> bottom-28 right-8
 
   if (!isOpen) return null;
 

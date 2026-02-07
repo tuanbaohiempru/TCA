@@ -91,20 +91,9 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
       {/* Main Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        {/* 2. HEADER (Glassmorphism) - Desktop Only AI Button */}
+        {/* 2. HEADER - Removed AI Button from here */}
         <header className="absolute top-0 left-0 w-full h-20 z-40 px-4 md:px-8 flex items-center justify-end pointer-events-none">
-            {/* AI Assistant Button (Floating) - Hidden on Mobile */}
-            <div className="pointer-events-auto pt-4 hidden md:block">
-                 <button 
-                    onClick={onToggleChat}
-                    className="group relative flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-white/20 dark:border-gray-700 pl-1 pr-4 py-1 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                 >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center text-white shadow-md group-hover:animate-pulse-slow">
-                        <i className="fas fa-sparkles"></i>
-                    </div>
-                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Trợ lý AI</span>
-                 </button>
-            </div>
+            {/* Header content empty now for desktop, reserved for future tools/notifs */}
         </header>
 
         {/* 3. CONTENT AREA */}
@@ -112,7 +101,34 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
           {children}
         </main>
 
-        {/* 4. BOTTOM NAVIGATION - Mobile Only (Central FAB) */}
+        {/* 4. DESKTOP FLOATING AI BUTTON (Bottom Right) */}
+        <div className="hidden md:block fixed bottom-10 right-10 z-[60]">
+            <button 
+                onClick={onToggleChat}
+                className="group relative w-16 h-16 bg-gradient-to-tr from-pru-red to-pink-500 rounded-full shadow-[0_8px_30px_rgb(237,27,46,0.4)] flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgb(237,27,46,0.6)] active:scale-95"
+            >
+                {/* Pulse Ring */}
+                <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-pulse"></div>
+                
+                {/* Icon */}
+                <i className="fas fa-sparkles text-2xl"></i>
+                
+                {/* Notification Badge (Optional logic can be added later) */}
+                <span className="absolute top-0 right-0 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-yellow-500"></span>
+                </span>
+
+                {/* Hover Label */}
+                <div className="absolute bottom-full mb-3 right-1/2 translate-x-1/2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg pointer-events-none">
+                    Trợ lý AI
+                    {/* Arrow */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-white"></div>
+                </div>
+            </button>
+        </div>
+
+        {/* 5. BOTTOM NAVIGATION - Mobile Only (Central FAB) */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 flex justify-between items-end px-2 pb-safe pt-2 z-50 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)]">
             {/* First 2 Items */}
             {navItems.slice(0, 2).map((item) => (
@@ -131,7 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
                 </Link>
             ))}
 
-            {/* Central AI Button (FAB) */}
+            {/* Central AI Button (Mobile FAB) */}
             <div className="relative -top-6 w-1/5 flex justify-center pointer-events-none">
                 <div className="pointer-events-auto">
                     <button 

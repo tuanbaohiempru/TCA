@@ -130,7 +130,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 auto-rows-min">
             
             {/* 1. GREETING & HERO (Span 8) */}
-            <div className="col-span-12 md:col-span-8 bg-gradient-to-r from-red-500 to-pink-600 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden animate-fade-in group">
+            <div className="col-span-12 md:col-span-8 bg-gradient-to-br from-pru-red to-red-700 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden animate-fade-in group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
                 <div className="absolute bottom-0 left-0 w-40 h-40 bg-black/10 rounded-full -ml-10 -mb-10 blur-2xl"></div>
                 
@@ -147,10 +147,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onAddAppointment, onUpdate
                     </div>
                     
                     <div className="mt-8 flex gap-3">
-                        <button onClick={() => navigate('/customers')} className="bg-white text-red-600 px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition active:scale-95 flex items-center gap-2">
+                        <button onClick={() => navigate('/customers')} className="bg-white text-pru-red px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition active:scale-95 flex items-center gap-2">
                             <i className="fas fa-plus"></i> Khách hàng mới
                         </button>
-                        <button onClick={() => navigate('/tools/finance')} className="bg-red-700/50 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700/70 transition backdrop-blur-md border border-white/10 flex items-center gap-2">
+                        <button onClick={() => navigate('/tools/finance')} className="bg-red-900/40 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-900/60 transition backdrop-blur-md border border-white/10 flex items-center gap-2">
                             <i className="fas fa-calculator"></i> Minh họa nhanh
                         </button>
                     </div>

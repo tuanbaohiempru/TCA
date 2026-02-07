@@ -70,6 +70,7 @@ const callGemini = async (systemInstruction: string, prompt: string | any, model
 
 // --- DATA CLEANING (SƠ CHẾ DỮ LIỆU) ---
 const cleanText = (text: string): string => {
+    if (!text) return "";
     return text
         .replace(/\s+/g, ' ') // Thay thế nhiều khoảng trắng/newline liên tiếp bằng 1 khoảng trắng
         .replace(/Trang \d+\/\d+/gi, '') // Xóa số trang (VD: Trang 1/50)
@@ -77,29 +78,40 @@ const cleanText = (text: string): string => {
         .trim();
 };
 
-// --- PDF EXTRACTION ---
+// --- PDF EXTRACTION (HYBRID: CLIENT -> SERVER FALLBACK) ---
 export const extractPdfText = async (fileUrl: string): Promise<string> => {
+    // Cách 1: Thử đọc trực tiếp trên trình duyệt (Nhanh, miễn phí)
     try {
-        console.log("Starting Client-side PDF Extraction...");
+        console.log("Attempting Client-side PDF Extraction...");
         const loadingTask = pdfjsLib.getDocument(fileUrl);
         const pdf = await loadingTask.promise;
         let fullText = '';
 
-        // PRIORITY 1: ACCURACY - READ ALL PAGES
         const maxPages = pdf.numPages; 
-
         for (let i = 1; i <= maxPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
-            // Join items with space, then clean later
             const pageText = textContent.items.map((item: any) => item.str).join(' ');
             fullText += `[Trang ${i}] ${pageText}\n`;
         }
 
-        // Sơ chế dữ liệu trước khi trả về
         return cleanText(fullText);
-    } catch (e) {
-        console.error("Client-side PDF Extract Error:", e);
+    } catch (e: any) {
+        console.warn("⚠️ Client-side PDF Extract Failed (Likely CORS). Switching to Cloud Function...", e.message);
+        
+        // Cách 2: Nếu lỗi (thường do CORS), nhờ Cloud Function đọc hộ
+        if (isFirebaseReady) {
+            try {
+                const extractFn = httpsCallable(functions, 'extractPdf');
+                const result: any = await extractFn({ url: fileUrl });
+                console.log("✅ Server-side PDF Extraction Success");
+                return cleanText(result.data.text);
+            } catch (serverError: any) {
+                console.error("❌ Server-side PDF Extract Failed:", serverError);
+                throw new Error("Lỗi đọc file PDF (Cả Client & Server đều thất bại). Vui lòng kiểm tra file hoặc Deploy lại Functions.");
+            }
+        }
+        
         return "Lỗi đọc file PDF. Vui lòng đảm bảo file có thể truy cập công khai hoặc CORS được cấu hình đúng.";
     }
 };

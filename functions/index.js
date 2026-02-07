@@ -6,12 +6,14 @@ require('dotenv').config();
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { GoogleGenAI } = require("@google/genai");
+const pdfParse = require("pdf-parse"); // Thư viện đọc PDF server-side
 
-// Cấu hình Global cho V2: Timeout 300s, RAM 256MB (Giảm RAM vì không còn xử lý PDF nặng)
-setGlobalOptions({ maxInstances: 10, timeoutSeconds: 60, memory: '256MiB' });
+// Cấu hình Global cho V2: Timeout 300s, RAM 512MB (Tăng RAM để xử lý PDF)
+setGlobalOptions({ maxInstances: 10, timeoutSeconds: 120, memory: '512MiB' });
 
 const API_KEY = process.env.API_KEY;
 
+// 1. Hàm Gateway gọi Gemini AI
 exports.geminiGateway = onCall(async (request) => {
     const data = request.data; 
 
@@ -83,5 +85,32 @@ exports.geminiGateway = onCall(async (request) => {
         else if (error.status === 404) code = 'not-found';
         else if (error.status === 429) code = 'resource-exhausted';
         throw new HttpsError(code, error.message);
+    }
+});
+
+// 2. Hàm đọc PDF Server-side (Dự phòng khi Client bị lỗi CORS)
+exports.extractPdf = onCall(async (request) => {
+    const fileUrl = request.data.url;
+    if (!fileUrl) {
+        throw new HttpsError('invalid-argument', 'URL file không hợp lệ.');
+    }
+
+    try {
+        console.log("Fetching PDF from URL:", fileUrl);
+        const response = await fetch(fileUrl);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        const data = await pdfParse(buffer);
+        return { text: data.text };
+
+    } catch (error) {
+        console.error("Server PDF Extract Error:", error);
+        throw new HttpsError('internal', `Lỗi đọc PDF trên server: ${error.message}`);
     }
 });

@@ -32,6 +32,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ products, onAdd, onUpdate, 
     const [showModal, setShowModal] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [activeTab, setActiveTab] = useState<'info' | 'rates'>('info');
+    const [showContentEditor, setShowContentEditor] = useState(false); // Toggle for manual text editor
     
     const [formData, setFormData] = useState<Product>({
         id: '', name: '', code: '', type: ProductType.MAIN, status: ProductStatus.ACTIVE, 
@@ -70,13 +71,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ products, onAdd, onUpdate, 
             rateTable: [],
             calculationConfig: { formulaType: FormulaType.RATE_BASED, lookupKeys: {}, resultKey: '' }
         });
-        setExcelColumns([]); setPreviewData([]); setIsEditing(false); setActiveTab('info'); setShowModal(true); setTestResult(null);
+        setExcelColumns([]); setPreviewData([]); setIsEditing(false); setActiveTab('info'); setShowModal(true); setTestResult(null); setShowContentEditor(false);
     };
 
     const openEdit = (p: Product) => {
         setFormData({ ...p, status: p.status || ProductStatus.ACTIVE, calculationConfig: p.calculationConfig || { formulaType: FormulaType.RATE_BASED, lookupKeys: {}, resultKey: '' } });
         if (p.rateTable && p.rateTable.length > 0) { setPreviewData(p.rateTable.slice(0, 5)); setExcelColumns(Object.keys(p.rateTable[0])); } else { setPreviewData([]); setExcelColumns([]); }
-        setIsEditing(true); setActiveTab('info'); setShowModal(true); setTestResult(null);
+        setIsEditing(true); setActiveTab('info'); setShowModal(true); setTestResult(null); setShowContentEditor(false);
     };
 
     const handleSubmit = () => {
@@ -139,7 +140,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ products, onAdd, onUpdate, 
     }, [calcType, inputData, showCalc]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center"><i className="fas fa-box-open text-pru-red mr-3"></i> Sản phẩm & Nghiệp vụ</h1>
                 <div className="flex gap-2">
@@ -239,12 +240,48 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ products, onAdd, onUpdate, 
                                                 <input type="file" className="hidden" accept="application/pdf" onChange={handlePdfUpload} disabled={isUploadingPdf} />
                                             </label>
                                         </div>
+                                        
                                         {formData.extractedContent ? (
-                                            <div className="mt-2 text-xs text-green-600 dark:text-green-400">
-                                                Hệ thống đã lưu trữ {formData.extractedContent.length.toLocaleString()} ký tự. AI có thể trả lời các câu hỏi về quyền lợi sản phẩm này.
+                                            <div className="mt-2">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-xs text-green-600 dark:text-green-400">
+                                                        Hệ thống đã lưu trữ {formData.extractedContent.length.toLocaleString()} ký tự.
+                                                    </span>
+                                                    <button 
+                                                        onClick={() => setShowContentEditor(!showContentEditor)}
+                                                        className="text-[10px] text-blue-500 hover:underline"
+                                                    >
+                                                        {showContentEditor ? 'Ẩn nội dung' : 'Xem & Sửa nội dung'}
+                                                    </button>
+                                                </div>
+                                                
+                                                {showContentEditor && (
+                                                    <textarea 
+                                                        className="w-full h-40 p-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200"
+                                                        value={formData.extractedContent}
+                                                        onChange={(e) => setFormData({...formData, extractedContent: e.target.value})}
+                                                        placeholder="Nội dung trích xuất từ PDF..."
+                                                    />
+                                                )}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 italic">Upload file PDF quy tắc sản phẩm để AI có thể hỗ trợ tư vấn.</p>
+                                            <div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 italic mb-2">Upload file PDF quy tắc sản phẩm để AI có thể hỗ trợ tư vấn.</p>
+                                                <button 
+                                                    onClick={() => setShowContentEditor(!showContentEditor)}
+                                                    className="text-[10px] text-blue-500 hover:underline"
+                                                >
+                                                    {showContentEditor ? 'Ẩn nhập liệu thủ công' : 'Hoặc nhập nội dung thủ công'}
+                                                </button>
+                                                {showContentEditor && (
+                                                    <textarea 
+                                                        className="w-full h-40 p-2 mt-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200"
+                                                        value={formData.extractedContent}
+                                                        onChange={(e) => setFormData({...formData, extractedContent: e.target.value})}
+                                                        placeholder="Paste nội dung điều khoản sản phẩm vào đây..."
+                                                    />
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>

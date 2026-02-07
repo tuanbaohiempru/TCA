@@ -5,8 +5,10 @@ import { GoogleGenAI, Type, Tool } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus, Contract, Product, Appointment, AppointmentType } from "../types";
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure Worker for PDF.js using CDN to avoid build issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+// FIX: Use the ESM worker from esm.sh to match the module system and avoid fake worker errors.
+// The cdnjs .js file is often UMD/Classic which fails when pdf.js (ESM) tries to load it as a module.
+// We use the exact version 4.0.379 to match the main library.
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs`;
 
 // --- CONFIGURATION ---
 const getApiKey = (): string => {
@@ -84,7 +86,16 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
     try {
         console.log("Reading PDF from memory...");
         const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        
+        // Pass arrayBuffer directly to getDocument
+        // Note: When using ES modules, pdf.js might require standard fonts path if the PDF uses standard fonts.
+        // For now, we assume standard fonts are not critical or are handled by defaults.
+        const loadingTask = pdfjsLib.getDocument({ 
+            data: arrayBuffer,
+            cMapUrl: `https://esm.sh/pdfjs-dist@4.0.379/cmaps/`,
+            cMapPacked: true,
+        });
+        
         const pdf = await loadingTask.promise;
         let fullText = '';
 
@@ -107,7 +118,11 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
     // Cách 1: Thử đọc trực tiếp trên trình duyệt (Nhanh, miễn phí)
     try {
         console.log("Attempting Client-side PDF Extraction...");
-        const loadingTask = pdfjsLib.getDocument(fileUrl);
+        const loadingTask = pdfjsLib.getDocument({
+            url: fileUrl,
+            cMapUrl: `https://esm.sh/pdfjs-dist@4.0.379/cmaps/`,
+            cMapPacked: true,
+        });
         const pdf = await loadingTask.promise;
         let fullText = '';
 

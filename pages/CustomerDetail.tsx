@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Contract, InteractionType, TimelineItem, ClaimRecord, ClaimStatus, CustomerDocument, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, PersonalityType, RelationshipType, ContractStatus, IssuanceType, FinancialStatus, ReadinessLevel, FinancialPriority, CustomerStatus, AssetType, LiabilityType, FinancialAsset, FinancialLiability } from '../types';
 import { formatDateVN, CurrencyInput, SearchableCustomerSelect } from '../components/Shared';
 import { uploadFile } from '../services/storage';
-import { analyzeSocialInput, chatWithData } from '../services/geminiService';
+import { chatWithData } from '../services/geminiService';
 import FamilyTree from '../components/FamilyTree';
 
 interface CustomerDetailProps {

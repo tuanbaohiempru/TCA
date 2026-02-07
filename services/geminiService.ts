@@ -1,7 +1,7 @@
 
 import { httpsCallable } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Tool } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus, Contract, Product, Appointment, AppointmentType } from "../types";
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -21,7 +21,7 @@ const clientAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 const DEFAULT_MODEL = 'gemini-2.5-flash'; 
 
 // --- GENERIC HELPERS ---
-const callGemini = async (systemInstruction: string, prompt: string | any, model: string = DEFAULT_MODEL, responseMimeType: string = 'text/plain', tools: any[] = []) => {
+const callGemini = async (systemInstruction: string, prompt: string | any, model: string = DEFAULT_MODEL, responseMimeType: string = 'text/plain', tools: Tool[] = []) => {
     // 1. Try Cloud Functions (Secure Production Way)
     if (isFirebaseReady) {
         try {
@@ -171,7 +171,7 @@ export const chatWithData = async (
     `;
 
     // 2. Define Tools
-    const tools = [
+    const tools: Tool[] = [
         {
             functionDeclarations: [
                 {

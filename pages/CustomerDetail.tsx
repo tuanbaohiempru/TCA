@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Contract, InteractionType, TimelineItem, ClaimRecord, ClaimStatus, CustomerDocument, Gender, MaritalStatus, FinancialRole, IncomeTrend, RiskTolerance, PersonalityType, RelationshipType, ContractStatus, IssuanceType, FinancialStatus, ReadinessLevel, FinancialPriority, CustomerStatus, AssetType, LiabilityType, FinancialAsset, FinancialLiability } from '../types';
 import { formatDateVN, CurrencyInput, SearchableCustomerSelect } from '../components/Shared';
 import { uploadFile } from '../services/storage';
-import { chatWithData, extractTextFromFile } from '../services/geminiService'; // Import extractTextFromFile
+import { chatWithData, extractTextFromFile } from '../services/geminiService'; 
 import FamilyTree from '../components/FamilyTree';
 
 interface CustomerDetailProps {
@@ -94,7 +94,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     const handleAddClaim = async () => {
         if (!newClaim.amountRequest) return alert("Vui lòng nhập số tiền");
         
-        // --- 4. Logic Ảnh hưởng của Claim đến Hợp đồng ---
+        // Logic Ảnh hưởng của Claim đến Hợp đồng
         if (newClaim.status === ClaimStatus.APPROVED && onUpdateContract) {
             const benefit = (newClaim.benefitType || '').toLowerCase();
             const isTerminatingEvent = benefit.includes('tử vong') || benefit.includes('thương tật toàn bộ');
@@ -160,8 +160,6 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
             let extracted = "";
             if (file.type === 'application/pdf') {
                  extracted = await extractTextFromFile(file);
-                 // Note: Ideally we store this somewhere if we want AI to query it later.
-                 // Currently CustomerDocument has 'extractedContent'.
             }
 
             // 2. Upload
@@ -179,7 +177,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
             await onUpdateCustomer({ ...customer, documents: [...(customer.documents || []), newDoc] });
         } catch (err) { 
             console.error(err);
-            alert("Lỗi tải file"); 
+            alert("Lỗi tải file: " + err); 
         }
     };
 
@@ -250,7 +248,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                     </div>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
-                    {/* UPDATED: AI Insight 360 Button */}
+                    {/* AI Insight 360 Button */}
                     <div className="relative group">
                         <button 
                             onClick={handleMagicScan} 
@@ -298,7 +296,8 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
             {/* TAB CONTENT */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    {/* ... (Keep existing Analysis, Finance, Family, Timeline tabs content as is) ... */}
+                    
+                    {/* ANALYSIS TAB */}
                     {activeTab === 'analysis' && gapAnalysis && (
                         <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
                             <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><i className="fas fa-shield-alt text-blue-500"></i> Phân tích bảo vệ thu nhập</h3>
@@ -327,8 +326,71 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                         </div>
                     )}
 
-                    {/* ... (Keep Finance, Family, Timeline, Contracts content same) ... */}
+                    {/* FINANCE TAB (Restored) */}
+                    {activeTab === 'finance' && (
+                        <div className="grid grid-cols-1 gap-6">
+                            <div className="bg-white dark:bg-pru-card rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-green-600 text-sm uppercase mb-4"><i className="fas fa-coins mr-2"></i> Tài sản tích lũy</h3>
+                                <div className="space-y-2 mb-4">
+                                    {customer.assets?.map(a => (
+                                        <div key={a.id} className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/10 rounded-lg group">
+                                            <div>
+                                                <div className="text-sm font-bold text-green-800 dark:text-green-300">{a.name}</div>
+                                                <div className="text-xs text-gray-500">{a.type}</div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-bold text-green-700 dark:text-green-400">{a.value.toLocaleString()}</span>
+                                                <button onClick={() => handleDeleteAsset(a.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><i className="fas fa-times"></i></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!customer.assets || customer.assets.length === 0) && <p className="text-xs text-gray-400 italic">Chưa có dữ liệu tài sản.</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input className="input-field py-1 text-sm flex-1" placeholder="Tên tài sản (Nhà, Xe...)" value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} />
+                                    <CurrencyInput className="input-field py-1 text-sm w-32" placeholder="Giá trị" value={newAsset.value || 0} onChange={v => setNewAsset({...newAsset, value: v})} />
+                                    <button onClick={handleAddAsset} className="bg-green-600 text-white px-3 rounded-lg"><i className="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-pru-card rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
+                                <h3 className="font-bold text-red-600 text-sm uppercase mb-4"><i className="fas fa-hand-holding-usd mr-2"></i> Khoản nợ (Liabilities)</h3>
+                                <div className="space-y-2 mb-4">
+                                    {customer.liabilities?.map(l => (
+                                        <div key={l.id} className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/10 rounded-lg group">
+                                            <div>
+                                                <div className="text-sm font-bold text-red-800 dark:text-red-300">{l.name}</div>
+                                                <div className="text-xs text-gray-500">{l.type}</div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-bold text-red-700 dark:text-red-400">{l.amount.toLocaleString()}</span>
+                                                <button onClick={() => handleDeleteLiability(l.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><i className="fas fa-times"></i></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!customer.liabilities || customer.liabilities.length === 0) && <p className="text-xs text-gray-400 italic">Chưa có khoản nợ nào.</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input className="input-field py-1 text-sm flex-1" placeholder="Tên khoản nợ" value={newLiability.name} onChange={e => setNewLiability({...newLiability, name: e.target.value})} />
+                                    <CurrencyInput className="input-field py-1 text-sm w-32" placeholder="Số tiền" value={newLiability.amount || 0} onChange={v => setNewLiability({...newLiability, amount: v})} />
+                                    <button onClick={handleAddLiability} className="bg-red-600 text-white px-3 rounded-lg"><i className="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* FAMILY TAB (Restored) */}
+                    {activeTab === 'family' && (
+                        <div className="bg-white dark:bg-pru-card rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100">Sơ đồ quan hệ</h3>
+                                <button onClick={() => setIsRelationModalOpen(true)} className="text-xs bg-pru-red text-white px-3 py-1.5 rounded-lg font-bold">+ Thêm QH</button>
+                            </div>
+                            <FamilyTree centerCustomer={customer} allCustomers={customers} contracts={contracts} />
+                        </div>
+                    )}
                     
+                    {/* TIMELINE TAB */}
                     {activeTab === 'timeline' && (
                         <div className="bg-white dark:bg-pru-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
                              <div className="mb-6 flex gap-2">
@@ -348,6 +410,29 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                         </div>
                     )}
 
+                    {/* CONTRACTS TAB (Restored) */}
+                    {activeTab === 'contracts' && (
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-800 dark:text-gray-100">Danh sách hợp đồng</h3></div>
+                            {customerContracts.length > 0 ? customerContracts.map(c => (
+                                <div key={c.id} className="bg-white dark:bg-pru-card p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+                                    <div className="flex justify-between mb-2">
+                                        <span className="font-black text-lg text-pru-red">{c.contractNumber}</span>
+                                        <span className={`text-xs px-2 py-1 rounded font-bold ${c.status === ContractStatus.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{c.status}</span>
+                                    </div>
+                                    <p className="font-bold text-gray-800 dark:text-gray-200">{c.mainProduct.productName}</p>
+                                    <div className="text-sm text-gray-500 mt-1">Phí: {c.totalFee.toLocaleString()} đ/năm</div>
+                                    {c.riders.length > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700 text-xs text-gray-500">
+                                            {c.riders.map((r, idx) => <div key={idx}>+ {r.productName} ({r.sumAssured.toLocaleString()})</div>)}
+                                        </div>
+                                    )}
+                                </div>
+                            )) : <div className="p-8 text-center text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl">Chưa có hợp đồng nào.</div>}
+                        </div>
+                    )}
+
+                    {/* CLAIMS TAB */}
                     {activeTab === 'claims' && (
                         <div className="space-y-6">
                             <div className="flex justify-between items-center"><h3 className="font-bold text-gray-800 dark:text-gray-100 uppercase text-xs tracking-widest">Lịch sử bồi thường</h3><button onClick={() => setIsAddingClaim(true)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Thêm Claim</button></div>
@@ -390,6 +475,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                         </div>
                     )}
                     
+                    {/* DOCS TAB */}
                     {activeTab === 'docs' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="bg-white dark:bg-pru-card p-4 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -417,6 +503,24 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                             </div>
                         </div>
                     )}
+
+                    {/* INFO TAB (Restored as Summary) */}
+                    {activeTab === 'info' && (
+                        <div className="bg-white dark:bg-pru-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 space-y-4">
+                            <h3 className="font-bold text-lg border-b border-gray-100 dark:border-gray-800 pb-2">Thông tin cá nhân</h3>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div><span className="text-gray-500 block text-xs uppercase">Họ tên</span><span className="font-bold">{customer.fullName}</span></div>
+                                <div><span className="text-gray-500 block text-xs uppercase">Ngày sinh</span><span className="font-bold">{formatDateVN(customer.dob)}</span></div>
+                                <div><span className="text-gray-500 block text-xs uppercase">CCCD</span><span className="font-bold">{customer.idCard}</span></div>
+                                <div><span className="text-gray-500 block text-xs uppercase">Điện thoại</span><span className="font-bold">{customer.phone}</span></div>
+                                <div><span className="text-gray-500 block text-xs uppercase">Nghề nghiệp</span><span className="font-bold">{customer.occupation}</span></div>
+                                <div><span className="text-gray-500 block text-xs uppercase">Địa chỉ</span><span className="font-bold">{customer.companyAddress}</span></div>
+                            </div>
+                            <div className="pt-4">
+                                <button onClick={() => setIsEditModalOpen(true)} className="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200">Chỉnh sửa thông tin</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* SIDEBAR RIGHT */}
@@ -429,7 +533,26 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
                             <button onClick={() => navigate(`/advisory/${customer.id}`)} className="flex flex-col items-center justify-center p-3 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition col-span-2"><i className="fas fa-robot text-xl mb-1"></i> <span className="text-xs font-bold">AI Roleplay luyện tập</span></button>
                         </div>
                     </div>
-                    {/* ... Family sidebar ... */}
+                    {/* Relationship Mini View */}
+                    <div className="bg-white dark:bg-pru-card rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-bold text-sm text-gray-500 uppercase">Gia đình</h3>
+                            <button onClick={() => setIsRelationModalOpen(true)} className="text-xs text-blue-500 hover:underline">Quản lý</button>
+                        </div>
+                        <div className="space-y-2">
+                            {customer.relationships?.map((r, i) => {
+                                const relCus = customers.find(c => c.id === r.relatedCustomerId);
+                                return (
+                                    <div key={i} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded" onClick={() => navigate(`/customers/${r.relatedCustomerId}`)}>
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">{relCus?.fullName.charAt(0)}</div>
+                                        <div className="flex-1 truncate">{relCus?.fullName}</div>
+                                        <div className="text-xs text-gray-400">{r.relationship}</div>
+                                    </div>
+                                );
+                            })}
+                            {(!customer.relationships || customer.relationships.length === 0) && <p className="text-xs text-gray-400 italic">Chưa có thông tin.</p>}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -454,9 +577,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, contracts, o
     );
 };
 
-// ... (Keep existing modals RelationshipModal and EditCustomerModal) ...
-// Ensure they are correctly exported or defined here if they were in the original file. 
-// Assuming they are defined below in the original file, I will keep them minimal here to save space as they weren't changed logic-wise.
+// ... Helper Modals ...
 
 const RelationshipModal: React.FC<{customer: Customer; allCustomers: Customer[]; onClose: () => void; onUpdate: (c: Customer) => Promise<void>; onAddCustomer: (c: Customer) => Promise<void>;}> = ({ customer, allCustomers, onClose, onUpdate }) => {
     const [selectedRelated, setSelectedRelated] = useState<Customer | null>(null);

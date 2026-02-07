@@ -91,15 +91,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
       {/* Main Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        {/* 2. HEADER (Glassmorphism) */}
-        <header className="absolute top-0 left-0 w-full h-20 z-40 px-4 md:px-8 flex items-center justify-between pointer-events-none">
-            <div className="pointer-events-auto md:hidden pt-4">
-                 {/* Mobile Menu Trigger could go here */}
-                 <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-pru-red font-bold">TC</div>
-            </div>
-            
-            {/* AI Assistant Button (Floating) */}
-            <div className="ml-auto pointer-events-auto pt-4">
+        {/* 2. HEADER (Glassmorphism) - Desktop Only AI Button */}
+        <header className="absolute top-0 left-0 w-full h-20 z-40 px-4 md:px-8 flex items-center justify-end pointer-events-none">
+            {/* AI Assistant Button (Floating) - Hidden on Mobile */}
+            <div className="pointer-events-auto pt-4 hidden md:block">
                  <button 
                     onClick={onToggleChat}
                     className="group relative flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-white/20 dark:border-gray-700 pl-1 pr-4 py-1 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
@@ -113,23 +108,54 @@ const Layout: React.FC<LayoutProps> = ({ children, onToggleChat, user }) => {
         </header>
 
         {/* 3. CONTENT AREA */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-20 md:pt-8 pb-24 md:pb-8 relative z-0 scroll-smooth">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 md:pt-8 pb-24 md:pb-8 relative z-0 scroll-smooth">
           {children}
         </main>
 
-        {/* 4. BOTTOM NAVIGATION - Mobile Only (Glass) */}
-        <nav className="md:hidden fixed bottom-4 left-4 right-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border border-gray-200 dark:border-gray-800 rounded-2xl flex justify-between items-center px-6 py-3 z-50 shadow-2xl pb-safe">
-            {navItems.map((item) => (
+        {/* 4. BOTTOM NAVIGATION - Mobile Only (Central FAB) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 flex justify-between items-end px-2 pb-safe pt-2 z-50 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)]">
+            {/* First 2 Items */}
+            {navItems.slice(0, 2).map((item) => (
                 <Link 
                     key={item.path}
                     to={item.path} 
-                    className={`flex flex-col items-center justify-center w-full relative group`}
+                    className={`flex flex-col items-center justify-center w-1/5 pb-2 relative group transition-colors ${isActive(item.path) ? 'text-pru-red' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}
                 >
-                    <div className={`text-xl mb-1 transition-all duration-300 ${isActive(item.path) ? 'text-pru-red -translate-y-1' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                    <div className={`text-xl mb-1 transition-transform duration-200 ${isActive(item.path) ? '-translate-y-1' : ''}`}>
                         <i className={`fas ${item.icon}`}></i>
                     </div>
+                    <span className="text-[9px] font-bold">{item.label}</span>
                     {isActive(item.path) && (
-                        <div className="absolute -bottom-2 w-1 h-1 bg-pru-red rounded-full"></div>
+                        <div className="absolute bottom-0 w-1 h-1 bg-pru-red rounded-full"></div>
+                    )}
+                </Link>
+            ))}
+
+            {/* Central AI Button (FAB) */}
+            <div className="relative -top-6 w-1/5 flex justify-center pointer-events-none">
+                <div className="pointer-events-auto">
+                    <button 
+                        onClick={onToggleChat}
+                        className="w-14 h-14 rounded-full bg-gradient-to-br from-pru-red to-pink-600 text-white shadow-lg shadow-red-500/40 flex items-center justify-center transform transition-transform active:scale-95 border-4 border-gray-50 dark:border-gray-900 hover:scale-105"
+                    >
+                        <i className="fas fa-sparkles text-xl animate-pulse-slow"></i>
+                    </button>
+                </div>
+            </div>
+
+            {/* Last 2 Items */}
+            {navItems.slice(2).map((item) => (
+                <Link 
+                    key={item.path}
+                    to={item.path} 
+                    className={`flex flex-col items-center justify-center w-1/5 pb-2 relative group transition-colors ${isActive(item.path) ? 'text-pru-red' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}
+                >
+                    <div className={`text-xl mb-1 transition-transform duration-200 ${isActive(item.path) ? '-translate-y-1' : ''}`}>
+                        <i className={`fas ${item.icon}`}></i>
+                    </div>
+                    <span className="text-[9px] font-bold">{item.label}</span>
+                    {isActive(item.path) && (
+                        <div className="absolute bottom-0 w-1 h-1 bg-pru-red rounded-full"></div>
                     )}
                 </Link>
             ))}

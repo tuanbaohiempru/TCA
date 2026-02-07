@@ -87,7 +87,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
     }
 
     return (
-        <div className="space-y-6 pb-20 h-full flex flex-col">
+        <div className="space-y-6 h-full flex flex-col">
              {/* HEADER & TABS */}
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200 dark:border-gray-800 pb-4">
                  <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Cài đặt hệ thống</h1>
@@ -109,7 +109,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
              </div>
              
              {/* CONTENT AREA */}
-             <div className="flex-1 overflow-y-auto">
+             <div className="flex-1 overflow-y-auto pb-4 custom-scrollbar">
                 {activeTab === 'profile' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                         {/* Left Col: Avatar & Interface Settings */}

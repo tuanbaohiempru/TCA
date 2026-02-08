@@ -3,12 +3,12 @@ import { httpsCallable } from "firebase/functions";
 import { functions, isFirebaseReady } from "./firebaseConfig";
 import { GoogleGenAI, Type, Tool } from "@google/genai";
 import { AppState, Customer, AgentProfile, ContractStatus, Contract, Product, Appointment, AppointmentType } from "../types";
-import * as pdfjsLib from 'pdfjs-dist';
+// FIX: Use named imports for better compatibility with ESM
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 
-// FIX: Use the ESM worker from esm.sh to match the module system and avoid fake worker errors.
-// The cdnjs .js file is often UMD/Classic which fails when pdf.js (ESM) tries to load it as a module.
-// We use the exact version 4.0.379 to match the main library.
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs`;
+// FIX: Use jsdelivr for a reliable, CORS-friendly ESM worker. 
+// Version must match the main library (4.0.379).
+GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
 
 // --- CONFIGURATION ---
 const getApiKey = (): string => {
@@ -84,19 +84,21 @@ const cleanText = (text: string): string => {
 // This bypasses CORS because it reads the file from local browser memory, not from a URL.
 export const extractTextFromFile = async (file: File): Promise<string> => {
     try {
-        console.log("Reading PDF from memory...");
+        console.log("Reading PDF from memory...", file.name, file.size);
         const arrayBuffer = await file.arrayBuffer();
         
         // Pass arrayBuffer directly to getDocument
-        // Note: When using ES modules, pdf.js might require standard fonts path if the PDF uses standard fonts.
-        // For now, we assume standard fonts are not critical or are handled by defaults.
-        const loadingTask = pdfjsLib.getDocument({ 
+        // Note: We intentionally do NOT set cMapUrl to avoid external fetch issues for fonts, 
+        // unless strictly necessary for asian fonts (which might result in garbled text if missing).
+        // Let's try adding it back if needed, but for now simple extraction is key.
+        const loadingTask = getDocument({ 
             data: arrayBuffer,
-            cMapUrl: `https://esm.sh/pdfjs-dist@4.0.379/cmaps/`,
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
             cMapPacked: true,
         });
         
         const pdf = await loadingTask.promise;
+        console.log(`PDF Loaded. Pages: ${pdf.numPages}`);
         let fullText = '';
 
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -105,10 +107,16 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
             const pageText = textContent.items.map((item: any) => item.str).join(' ');
             fullText += `[Trang ${i}] ${pageText}\n`;
         }
+        
+        console.log("PDF Extraction Complete. Length:", fullText.length);
         return cleanText(fullText);
-    } catch (e) {
-        console.error("Client File Extract Error", e);
-        return "";
+    } catch (e: any) {
+        console.error("Client File Extract Error details:", e);
+        // Fallback or rethrow to let UI know
+        if (e.name === 'MissingPDFException') {
+            return "Lỗi: File PDF không hợp lệ hoặc bị hỏng.";
+        }
+        return `Lỗi đọc file: ${e.message}`;
     }
 }
 
@@ -118,9 +126,9 @@ export const extractPdfText = async (fileUrl: string): Promise<string> => {
     // Cách 1: Thử đọc trực tiếp trên trình duyệt (Nhanh, miễn phí)
     try {
         console.log("Attempting Client-side PDF Extraction...");
-        const loadingTask = pdfjsLib.getDocument({
+        const loadingTask = getDocument({
             url: fileUrl,
-            cMapUrl: `https://esm.sh/pdfjs-dist@4.0.379/cmaps/`,
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
             cMapPacked: true,
         });
         const pdf = await loadingTask.promise;

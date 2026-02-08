@@ -14,12 +14,26 @@ export const formatDateVN = (dateStr: string) => {
 
 export const formatAdvisoryContent = (text: string) => {
     let html = text;
+    // Sanitize basic chars
     html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    html = html.replace(/^### (.*$)/gim, '<h3 class="text-pru-red font-bold text-base mt-3 mb-1 border-b border-red-100 dark:border-red-900/30 pb-1">$1</h3>');
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900 dark:text-gray-100 bg-red-50 dark:bg-red-900/20 px-1 rounded border border-red-100 dark:border-red-900/30">$1</strong>');
-    html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-500 dark:text-gray-400">$1</em>');
-    html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start ml-1 mb-1"><span class="text-pru-red mr-2 font-bold">•</span><span class="dark:text-gray-300">$1</span></div>');
+    
+    // 1. HEADERS: Make them stand out
+    html = html.replace(/^### (.*$)/gim, '<h3 class="text-pru-red font-bold text-base mt-3 mb-2 border-b border-red-100 dark:border-red-900/30 pb-1 uppercase tracking-wide">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 class="text-gray-800 dark:text-gray-100 font-black text-lg mt-4 mb-2">$1</h2>');
+
+    // 2. BOLD & RED EMPHASIS (**text**)
+    // User requirement: "bôi đậm, tô đỏ với những câu từ quan trọng"
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-pru-red dark:text-red-400 bg-red-50 dark:bg-red-900/10 px-1 rounded mx-0.5">$1</strong>');
+    
+    // 3. ITALIC & NOTE (*text*)
+    html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-600 dark:text-gray-400 font-medium">$1</em>');
+    
+    // 4. LISTS (- item)
+    html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start ml-1 mb-1.5"><span class="text-pru-red mr-2 font-bold">•</span><span class="text-gray-700 dark:text-gray-300">$1</span></div>');
+    
+    // 5. LINE BREAKS
     html = html.replace(/\n/g, '<br />');
+    
     return html;
 };
 
@@ -29,27 +43,26 @@ export const cleanMarkdownForClipboard = (text: string) => {
     // 0. Remove Table Separator lines (e.g. |---|---|)
     clean = clean.replace(/^\|?[\s\-\|:]+\|?$/gm, '');
 
-    // 1. Convert Headers (### Title) to Uppercase for emphasis in plain text
-    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n${p1.toUpperCase()}\n`);
-    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n${p1.toUpperCase()}\n`);
+    // 1. Convert Headers to Uppercase for Zalo emphasis
+    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n👉 ${p1.toUpperCase()}\n`);
+    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n⭐ ${p1.toUpperCase()}\n`);
     
-    // 2. Remove Bold (**text**) -> text
-    clean = clean.replace(/\*\*(.*?)\*\*/g, '$1');
+    // 2. Bold (**text**) -> Keep *text* for Zalo emphasis or just text
+    // Zalo doesn't support bold via markdown, but *text* is understood as emphasis by readers
+    clean = clean.replace(/\*\*(.*?)\*\*/g, ' *$1* ');
     
-    // 3. Remove Italic (*text*) -> text
-    clean = clean.replace(/\*(.*?)\*/g, '$1');
+    // 3. Italic (*text*) -> text
+    clean = clean.replace(/\*(.*?)\*/g, ' _ $1 _ ');
     
-    // 4. Convert List Items (- item) to Bullet points (• item) which look better on Zalo
+    // 4. Convert List Items (- item) to Bullet points (• item)
     clean = clean.replace(/^\-\s+/gim, '• ');
 
     // 5. Handle Table Rows: | Cell | Cell | -> Cell - Cell
-    // Remove starting/ending pipes
     clean = clean.replace(/^\|/gm, '').replace(/\|$/gm, '');
-    // Replace internal pipes with dash
     clean = clean.replace(/\|/g, ' - ');
     
-    // 6. Clean extra newlines
-    clean = clean.replace(/\n\n+/g, '\n\n');
+    // 6. Clean extra newlines for compact Zalo message
+    clean = clean.replace(/\n\n\n+/g, '\n\n');
     
     return clean.trim();
 };

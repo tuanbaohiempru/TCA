@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { AppState, CustomerStatus, Gender, AppointmentType, AppointmentStatus, InteractionType, TimelineItem, Customer, MaritalStatus, FinancialRole } from '../types';
 import { chatWithData } from '../services/geminiService';
 import { addData, COLLECTIONS } from '../services/db';
-import { cleanMarkdownForClipboard } from '../components/Shared';
+import { cleanMarkdownForClipboard, formatAdvisoryContent } from '../components/Shared';
 import { useNavigate } from 'react-router-dom';
 
 interface AIChatProps {
@@ -99,6 +99,12 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
   const removeAttachment = () => {
       setAttachment(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCopyMessage = (text: string) => {
+        const cleanText = cleanMarkdownForClipboard(text);
+        navigator.clipboard.writeText(cleanText);
+        // Visual feedback would be good, but simple is fine for now
   };
 
   const handleSend = async (manualQuery?: string) => {
@@ -294,7 +300,7 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group relative`}>
                 <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
                     {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs mr-2 flex-shrink-0 border border-red-200"><i className="fas fa-robot"></i></div>}
                     <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm leading-relaxed ${
@@ -304,9 +310,20 @@ const AIChat: React.FC<AIChatProps> = ({ state, isOpen, setIsOpen }) => {
                     }`}>
                         {msg.isAction && <div className="mb-1 text-green-600 font-bold text-xs uppercase"><i className="fas fa-check-circle mr-1"></i> Hoàn thành</div>}
                         
-                        <div dangerouslySetInnerHTML={{ __html: msg.text ? msg.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') : '<span class="text-gray-400 italic">...</span>' }} />
+                        <div dangerouslySetInnerHTML={{ __html: formatAdvisoryContent(msg.text) }} />
                     </div>
                 </div>
+
+                {/* COPY BUTTON FOR AI MESSAGES */}
+                {msg.role === 'model' && (
+                    <button 
+                        onClick={() => handleCopyMessage(msg.text)}
+                        className="absolute left-10 -bottom-3 opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-pru-red bg-white border border-gray-200 rounded-full w-6 h-6 flex items-center justify-center shadow-sm z-10"
+                        title="Copy nội dung (Zalo)"
+                    >
+                        <i className="fas fa-copy text-[10px]"></i>
+                    </button>
+                )}
 
                 {msg.actionData && msg.actionData.action === 'SELECT_CUSTOMER' && (
                     <div className="ml-10 mt-2 grid grid-cols-1 gap-2 w-[85%] animate-fade-in">

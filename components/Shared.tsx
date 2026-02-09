@@ -36,15 +36,7 @@ export const formatAdvisoryContent = (text: string) => {
     return html;
 };
 
-// --- ZALO OPTIMIZED COPY FUNCTION ---
-const toMathBold = (str: string) => {
-    return str.replace(/[0-9]/g, (char) => {
-        // Convert ASCII digit to Mathematical Bold Digit (Unicode)
-        // 0x1D7CE is the code point for Mathematical Bold Digit Zero
-        return String.fromCodePoint(char.charCodeAt(0) + 120782);
-    });
-};
-
+// --- CLEAN COPY FUNCTION (REVERTED TO STANDARD) ---
 export const cleanMarkdownForClipboard = (text: string) => {
     let clean = text;
     
@@ -53,27 +45,23 @@ export const cleanMarkdownForClipboard = (text: string) => {
     clean = clean.replace(/^\|/gm, '').replace(/\|$/gm, '');
     clean = clean.replace(/\|/g, ' - ');
 
-    // 1. Headers -> Uppercase with Emojis
-    // H3 -> 🔶 HEADER
-    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n🔶 ${p1.toUpperCase()}\n`);
-    // H2 -> ⭐️ HEADER ⭐️
-    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n⭐️ ${p1.toUpperCase()} ⭐️\n`);
+    // 1. Headers -> Uppercase (Clean & Professional)
+    // H3 -> UPPERCASE
+    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n${p1.toUpperCase()}\n`);
+    // H2 -> [ UPPERCASE ]
+    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n[ ${p1.toUpperCase()} ]\n`);
     
-    // 2. Bold (**text**) -> 👉 TEXT 👈
-    // Making it uppercase helps it stand out in plain text
-    clean = clean.replace(/\*\*(.*?)\*\*/g, (match, p1) => `👉 ${p1} 👈`);
+    // 2. Bold (**text**) -> *text*
+    // Standard chatting convention for emphasis, no distracting icons
+    clean = clean.replace(/\*\*(.*?)\*\*/g, ' *$1* ');
     
-    // 3. Italic (*text*) -> "text"
-    clean = clean.replace(/\*(.*?)\*/g, '"$1"');
+    // 3. Italic (*text*) -> text
+    clean = clean.replace(/\*(.*?)\*/g, ' $1 ');
     
-    // 4. List Items (- item) -> ✅ item
-    clean = clean.replace(/^\-\s+/gim, '✅ ');
+    // 4. List Items (- item) -> • item
+    clean = clean.replace(/^\-\s+/gim, '• ');
 
-    // 5. YAYTEXT: Convert all numbers to Bold Unicode
-    // This makes prices/years/percentages pop!
-    clean = toMathBold(clean);
-    
-    // 6. Clean extra newlines
+    // 5. Clean extra newlines
     clean = clean.replace(/\n\n\n+/g, '\n\n');
     
     return clean.trim();

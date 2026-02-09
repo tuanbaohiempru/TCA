@@ -19,10 +19,11 @@ const ToolsPage: React.FC = () => {
         {
             title: "Nghiệp vụ & Hậu cần (Smart Ops)",
             items: [
+                { id: 'appointments', label: 'Quản lý Lịch hẹn', icon: 'fa-calendar-check', color: 'indigo', path: '/appointments' },
                 { id: 'contracts', label: 'Quản lý Hợp đồng', icon: 'fa-file-signature', color: 'cyan', path: '/contracts' },
                 { id: 'ops', label: 'Smart Claim & Thẩm định', icon: 'fa-file-medical-alt', color: 'orange', path: '/tools/ops' },
-                { id: 'comparison', label: 'Đấu trường SP (Battle)', icon: 'fa-fist-raised', color: 'red', path: '/tools/comparison' }, // Updated
-                { id: 'competitors', label: 'Quản lý Data Đối thủ', icon: 'fa-database', color: 'gray', path: '/tools/competitors' }, // New Admin Link
+                { id: 'comparison', label: 'Đấu trường SP (Battle)', icon: 'fa-fist-raised', color: 'red', path: '/tools/comparison' }, 
+                { id: 'competitors', label: 'Quản lý Data Đối thủ', icon: 'fa-database', color: 'gray', path: '/tools/competitors' }, 
                 { id: 'objections', label: 'Xử lý Từ chối (SOS)', icon: 'fa-fire-extinguisher', color: 'pink', path: '/tools/ops?tab=objections' },
             ]
         },

@@ -22,7 +22,6 @@ export const formatAdvisoryContent = (text: string) => {
     html = html.replace(/^## (.*$)/gim, '<h2 class="text-gray-800 dark:text-gray-100 font-black text-lg mt-4 mb-2">$1</h2>');
 
     // 2. BOLD & RED EMPHASIS (**text**)
-    // User requirement: "bôi đậm, tô đỏ với những câu từ quan trọng"
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-pru-red dark:text-red-400 bg-red-50 dark:bg-red-900/10 px-1 rounded mx-0.5">$1</strong>');
     
     // 3. ITALIC & NOTE (*text*)
@@ -37,31 +36,44 @@ export const formatAdvisoryContent = (text: string) => {
     return html;
 };
 
+// --- ZALO OPTIMIZED COPY FUNCTION ---
+const toMathBold = (str: string) => {
+    return str.replace(/[0-9]/g, (char) => {
+        // Convert ASCII digit to Mathematical Bold Digit (Unicode)
+        // 0x1D7CE is the code point for Mathematical Bold Digit Zero
+        return String.fromCodePoint(char.charCodeAt(0) + 120782);
+    });
+};
+
 export const cleanMarkdownForClipboard = (text: string) => {
     let clean = text;
     
-    // 0. Remove Table Separator lines (e.g. |---|---|)
+    // 0. Clean Table Syntax
     clean = clean.replace(/^\|?[\s\-\|:]+\|?$/gm, '');
-
-    // 1. Convert Headers to Uppercase for Zalo emphasis
-    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n👉 ${p1.toUpperCase()}\n`);
-    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n⭐ ${p1.toUpperCase()}\n`);
-    
-    // 2. Bold (**text**) -> Keep *text* for Zalo emphasis or just text
-    // Zalo doesn't support bold via markdown, but *text* is understood as emphasis by readers
-    clean = clean.replace(/\*\*(.*?)\*\*/g, ' *$1* ');
-    
-    // 3. Italic (*text*) -> text
-    clean = clean.replace(/\*(.*?)\*/g, ' _ $1 _ ');
-    
-    // 4. Convert List Items (- item) to Bullet points (• item)
-    clean = clean.replace(/^\-\s+/gim, '• ');
-
-    // 5. Handle Table Rows: | Cell | Cell | -> Cell - Cell
     clean = clean.replace(/^\|/gm, '').replace(/\|$/gm, '');
     clean = clean.replace(/\|/g, ' - ');
+
+    // 1. Headers -> Uppercase with Emojis
+    // H3 -> 🔶 HEADER
+    clean = clean.replace(/^###\s+(.*$)/gim, (match, p1) => `\n🔶 ${p1.toUpperCase()}\n`);
+    // H2 -> ⭐️ HEADER ⭐️
+    clean = clean.replace(/^##\s+(.*$)/gim, (match, p1) => `\n⭐️ ${p1.toUpperCase()} ⭐️\n`);
     
-    // 6. Clean extra newlines for compact Zalo message
+    // 2. Bold (**text**) -> 👉 TEXT 👈
+    // Making it uppercase helps it stand out in plain text
+    clean = clean.replace(/\*\*(.*?)\*\*/g, (match, p1) => `👉 ${p1} 👈`);
+    
+    // 3. Italic (*text*) -> "text"
+    clean = clean.replace(/\*(.*?)\*/g, '"$1"');
+    
+    // 4. List Items (- item) -> ✅ item
+    clean = clean.replace(/^\-\s+/gim, '✅ ');
+
+    // 5. YAYTEXT: Convert all numbers to Bold Unicode
+    // This makes prices/years/percentages pop!
+    clean = toMathBold(clean);
+    
+    // 6. Clean extra newlines
     clean = clean.replace(/\n\n\n+/g, '\n\n');
     
     return clean.trim();

@@ -17,18 +17,32 @@ export const formatAdvisoryContent = (text: string) => {
     // Sanitize basic chars
     html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     
-    // 1. HEADERS: Make them stand out
-    html = html.replace(/^### (.*$)/gim, '<h3 class="text-pru-red font-bold text-base mt-3 mb-2 border-b border-red-100 dark:border-red-900/30 pb-1 uppercase tracking-wide">$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2 class="text-gray-800 dark:text-gray-100 font-black text-lg mt-4 mb-2">$1</h2>');
+    // 1. HEADERS: Clean & Professional
+    html = html.replace(/^### (.*$)/gim, '<h3 class="text-pru-red font-bold text-base mt-4 mb-2 uppercase tracking-wide border-b border-red-100 dark:border-red-900/30 pb-1">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 class="text-gray-900 dark:text-gray-100 font-black text-lg mt-5 mb-3">$1</h2>');
 
-    // 2. BOLD & RED EMPHASIS (**text**)
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-pru-red dark:text-red-400 bg-red-50 dark:bg-red-900/10 px-1 rounded mx-0.5">$1</strong>');
+    // 2. BOLD EMPHASIS (**text**)
+    // Logic: Remove background. Bold is Black by default. Only Numbers/Money are Red.
+    html = html.replace(/\*\*(.*?)\*\*/g, (match, content) => {
+        // Detect if content contains digits (0-9) to identify money/dates/percents
+        const isNumber = /\d/.test(content); 
+        
+        // CSS: 
+        // - No background (bg-*)
+        // - Numbers: text-pru-red (Red)
+        // - Text: text-gray-900 (Black/Dark)
+        const colorClass = isNumber 
+            ? 'text-pru-red dark:text-red-400' 
+            : 'text-gray-900 dark:text-gray-100';
+            
+        return `<strong class="font-bold ${colorClass}">${content}</strong>`;
+    });
     
     // 3. ITALIC & NOTE (*text*)
-    html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-600 dark:text-gray-400 font-medium">$1</em>');
+    html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-500 dark:text-gray-400">$1</em>');
     
-    // 4. LISTS (- item)
-    html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start ml-1 mb-1.5"><span class="text-pru-red mr-2 font-bold">•</span><span class="text-gray-700 dark:text-gray-300">$1</span></div>');
+    // 4. LISTS (- item) -> Clean bullet points
+    html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start ml-1 mb-1.5"><span class="text-gray-400 mr-2 mt-1.5 text-[6px]"><i class="fas fa-circle"></i></span><span class="text-gray-700 dark:text-gray-300 leading-relaxed">$1</span></div>');
     
     // 5. LINE BREAKS
     html = html.replace(/\n/g, '<br />');
